@@ -74,30 +74,57 @@ Ready for pair programming as %s. Standing by.
 func ExtractLatestTurn(screen string, sender, recipient string) (string, bool) {
 	cleaned := CleanTUIArtifacts(screen)
 
-	// Regex to match [ CQ <sender> -> <recipient> ] ... [ <sender> over ]
-	// or [ CQ <sender> -> <recipient> ] ... [ <sender> out ]
-	pattern := fmt.Sprintf(`(?s)\[\s*CQ\s+%s\s*->\s*%s\s*\]\s*(.*?)\s*\[\s*%s\s*(?:over|out)\s*\]`,
+	// 1. Strict regex: [ CQ <sender> -> <recipient> ] ... [ <sender> over ]
+	strictPattern := fmt.Sprintf(`(?s)\[\s*CQ\s+%s\s*->\s*%s\s*\]\s*(.*?)\s*\[\s*%s\s*(?:over|out)\s*\]`,
 		regexp.QuoteMeta(sender),
 		regexp.QuoteMeta(recipient),
 		regexp.QuoteMeta(sender),
 	)
-	re := regexp.MustCompile(pattern)
-
-	matches := re.FindAllStringSubmatch(cleaned, -1)
-	if len(matches) == 0 {
-		return "", false
+	strictRe := regexp.MustCompile(strictPattern)
+	if matches := strictRe.FindAllStringSubmatch(cleaned, -1); len(matches) > 0 {
+		return strings.TrimSpace(matches[len(matches)-1][1]), true
 	}
 
-	// Get the last occurrence
-	last := matches[len(matches)-1]
-	body := strings.TrimSpace(last[1])
-	return body, true
+	// 2. Relaxed regex (where markdown may strip brackets)
+	relaxedPattern := fmt.Sprintf(`(?si)(?:\[\s*)?CQ\s+%s\s*->\s*%s(?:\s*\])?\s*(.*?)\s*(?:\[\s*)?%s\s*(?:over|out)(?:\s*\])?`,
+		regexp.QuoteMeta(sender),
+		regexp.QuoteMeta(recipient),
+		regexp.QuoteMeta(sender),
+	)
+	relaxedRe := regexp.MustCompile(relaxedPattern)
+	if matches := relaxedRe.FindAllStringSubmatch(cleaned, -1); len(matches) > 0 {
+		return strings.TrimSpace(matches[len(matches)-1][1]), true
+	}
+
+	// 3. Fallback: find text before '<sender> over' or '<sender> out'
+	overPattern := fmt.Sprintf(`(?si)(.*?)\s*(?:\[\s*)?%s\s*(?:over|out)(?:\s*\])?`, regexp.QuoteMeta(sender))
+	overRe := regexp.MustCompile(overPattern)
+	if matches := overRe.FindAllStringSubmatch(cleaned, -1); len(matches) > 0 {
+		last := matches[len(matches)-1][1]
+		// Trim any leading prompt delimiter
+		if idx := strings.LastIndex(last, fmt.Sprintf("-> %s", sender)); idx != -1 {
+			last = last[idx:]
+			if newlineIdx := strings.Index(last, "\n"); newlineIdx != -1 {
+				last = last[newlineIdx:]
+			}
+		}
+		body := strings.TrimSpace(last)
+		if len(body) > 0 {
+			return body, true
+		}
+	}
+
+	return "", false
 }
 
 // HasTurnFinished checks if the screen indicates the sender finished their turn.
 func HasTurnFinished(screen string, sender string) bool {
 	cleaned := StripANSI(screen)
-	overPattern := fmt.Sprintf(`\[\s*%s\s*(?:over|out)\s*\]`, regexp.QuoteMeta(sender))
+	overPattern := fmt.Sprintf(`(?i)(?:\[\s*%s\s*(?:over|out)\s*\]|\b%s\s+(?:over|out)\b)`,
+		regexp.QuoteMeta(sender),
+		regexp.QuoteMeta(sender),
+	)
 	re := regexp.MustCompile(overPattern)
 	return re.MatchString(cleaned)
 }
+

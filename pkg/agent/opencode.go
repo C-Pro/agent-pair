@@ -68,18 +68,22 @@ func (o *OpenCodeAgent) IsReady(screenOutput string) bool {
 func (o *OpenCodeAgent) IsTurnFinished(screenOutput string, callsign string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
 
-	// Must have the closing marker
-	if !protocol.HasTurnFinished(screenOutput, callsign) {
-		return false
-	}
-
 	// Must not be currently generating/thinking
-	if strings.Contains(clean, "esc interrupt") || strings.Contains(clean, "Thinking") {
+	if strings.Contains(clean, "esc interrupt") || strings.Contains(clean, "Thinking") || strings.Contains(clean, "⠹") {
 		return false
 	}
 
-	// Completion indicator in OpenCode
-	return strings.Contains(clean, "▣") || strings.Contains(clean, "OpenCode") || strings.Contains(clean, "Ask anything")
+	// Completion badge is present in OpenCode upon turn finish (e.g. ▣ Plan · Muse Spark 1.3 Free · 7.6s)
+	if strings.Contains(clean, "▣") {
+		return true
+	}
+
+	// Or if turn closing marker is present
+	if protocol.HasTurnFinished(screenOutput, callsign) {
+		return true
+	}
+
+	return false
 }
 
 func (o *OpenCodeAgent) StopCommand() string {
