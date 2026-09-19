@@ -11,10 +11,10 @@ This skill enables Antigravity (`agy`) to conduct a real-time, multi-agent pair 
 
 ## 1. Roles and Responsibilities
 
-- **Lead Agent (`agy` / callsign: `gemini`)**:
+- **Lead Agent (`agy` / callsign derived from model, e.g. `gemini` or `gemini-3.8-flash`)**:
   - Directs the programming task, asks questions, requests reviews, and drives execution.
   - Retains write permissions and makes actual code changes in the repository.
-- **Follower Agent (e.g., `opencode` / callsign: `muse`)**:
+- **Follower Agent (e.g., `opencode` / callsign derived from model, e.g. `muse-spark-1.3`, `big-pickle`, `qwen3.6-35b`)**:
   - Operates in **read-only mode** (`--agent plan`) in the same working directory.
   - Analyzes files, critiques architecture, proposes alternative implementations, and checks edge cases.
 
@@ -22,25 +22,25 @@ This skill enables Antigravity (`agy`) to conduct a real-time, multi-agent pair 
 
 ## 2. Communication Protocol (Radio CQ)
 
-Messages exchanged between agents follow a radio-style transmission format:
+Messages exchanged between agents follow a radio-style transmission format where callsigns dynamically follow the model names:
 
 - **Turn Header**:
   ```text
-  [ CQ <sender> -> <recipient> ]
+  [ CQ <sender-model> -> <recipient-model> ]
   ```
-  *(e.g., `[ CQ gemini -> muse ]` or `[ CQ muse -> gemini ]`)*
+  *(e.g., `[ CQ gemini -> muse-spark-1.3 ]` or `[ CQ muse-spark-1.3 -> gemini ]`)*
 
 - **Turn Footer**:
   ```text
-  [ <sender> over ]
+  [ <sender-model> over ]
   ```
 
 - **Session Sign-off**:
   ```text
-  [ <sender> out ]
+  [ <sender-model> out ]
   ```
 
-The companion CLI tool `agent-pair` automatically handles formatting and extracting these markers.
+The companion CLI tool `agent-pair` automatically extracts clean callsigns from model strings and injects these markers. Explicit callsign overrides can still be provided via `--follower-callsign` and `--leader-callsign`.
 
 ---
 

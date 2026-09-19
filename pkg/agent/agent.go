@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"strings"
 )
 
 // LaunchOptions provides settings for constructing an agent CLI command.
@@ -69,4 +70,58 @@ func SanitizeLaunchCommand(cmd []string) []string {
 	}
 	return append(prefix, cmd...)
 }
+
+// DeriveCallsign extracts a clean, standardized callsign from a model identifier.
+// When no model is provided, it falls back to the provided default/agent name.
+func DeriveCallsign(model string, fallback string) string {
+	if model == "" {
+		return fallback
+	}
+
+	// 1. Remove provider prefix (e.g., "opencode/", "Lemonade/", "ollama/", "anthropic/")
+	s := model
+	if idx := strings.LastIndex(s, "/"); idx != -1 {
+		s = s[idx+1:]
+	}
+
+	// 2. Lowercase
+	s = strings.ToLower(s)
+
+	// 3. Strip common noise suffixes
+	noiseSuffixes := []string{
+		"-contributor-free",
+		"-free",
+		"-latest",
+		"-preview",
+		"-it-mtp-gguf",
+		"-mtp-gguf",
+		"-gguf-q4_k_m",
+		"-gguf-ud-q4_k_xl",
+		"-gguf",
+		"-it",
+	}
+	for _, suffix := range noiseSuffixes {
+		if strings.HasSuffix(s, suffix) {
+			s = strings.TrimSuffix(s, suffix)
+			break
+		}
+	}
+
+	// 4. Replace colons, underscores, or spaces with hyphens
+	s = strings.ReplaceAll(s, ":", "-")
+	s = strings.ReplaceAll(s, "_", "-")
+	s = strings.ReplaceAll(s, " ", "-")
+
+	// 5. Clean up duplicate hyphens
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-.")
+
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
 

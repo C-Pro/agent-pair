@@ -92,8 +92,9 @@ func runStart(args []string) error {
 	followerName := fs.String("follower", "opencode", "Follower agent (opencode, agy, claude, codex)")
 	leaderName := fs.String("leader", "agy", "Leader agent (agy, opencode, claude, codex)")
 	model := fs.String("model", "", "Model identifier for follower")
-	followerCallsign := fs.String("follower-callsign", "", "Callsign for follower")
-	leaderCallsign := fs.String("leader-callsign", "", "Callsign for leader")
+	leaderModelFlag := fs.String("leader-model", "", "Model identifier for leader")
+	followerCallsign := fs.String("follower-callsign", "", "Explicit callsign for follower (defaults to model name)")
+	leaderCallsign := fs.String("leader-callsign", "", "Explicit callsign for leader (defaults to model name)")
 	readOnly := fs.Bool("read-only", true, "Start follower in read-only mode")
 	cwd := fs.String("cwd", "", "Working directory (defaults to current dir)")
 	direction := fs.String("direction", "horizontal", "Pane split direction (horizontal, vertical)")
@@ -144,15 +145,19 @@ func runStart(args []string) error {
 		targetModel = "opencode/muse-spark-1.3-contributor-free"
 	}
 
-	// Resolve callsigns
+	// Resolve callsigns: always follow model names unless explicitly overridden
 	fCallsign := *followerCallsign
 	if fCallsign == "" {
-		fCallsign = followerAdapter.DefaultCallsign(targetModel)
+		fCallsign = agent.DeriveCallsign(targetModel, followerAdapter.Name())
 	}
 
 	lCallsign := *leaderCallsign
 	if lCallsign == "" {
-		lCallsign = leaderAdapter.DefaultCallsign("")
+		lModel := *leaderModelFlag
+		if lModel == "" && leaderAdapter.Name() == "agy" {
+			lModel = os.Getenv("GEMINI_MODEL")
+		}
+		lCallsign = agent.DeriveCallsign(lModel, leaderAdapter.DefaultCallsign(""))
 	}
 
 	// Build follower launch command

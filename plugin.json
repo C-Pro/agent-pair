@@ -1,0 +1,19 @@
+{
+  "name": "agent-pair",
+  "version": "0.1.0",
+  "description": "Multi-agent pair programming via terminal multiplexer IPC (tmux, zellij, herdr)",
+  "author": {
+    "name": "cpro"
+  },
+  "license": "MIT",
+  "keywords": [
+    "pair-programming",
+    "multi-agent",
+    "tmux",
+    "zellij",
+    "herdr",
+    "opencode",
+    "claude",
+    "codex"
+  ]
+}
