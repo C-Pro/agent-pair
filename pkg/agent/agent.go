@@ -50,3 +50,23 @@ func List() []string {
 	}
 	return names
 }
+
+// SanitizeLaunchCommand wraps a command with environment variable unsets
+// for outer terminal emulators (Kitty, Ghostty, WezTerm) so that background/split panes
+// do not trigger escape-sequence capability queries that leak into the active pane.
+func SanitizeLaunchCommand(cmd []string) []string {
+	prefix := []string{
+		"env",
+		"-u", "KITTY_WINDOW_ID",
+		"-u", "KITTY_PID",
+		"-u", "KITTY_PUBLIC_KEY",
+		"-u", "KITTY_SHELL_INTEGRATION",
+		"-u", "KITTY_LISTEN_ON",
+		"-u", "KITTY_INSTALLATION_DIR",
+		"-u", "GHOSTTY_RESOURCES_DIR",
+		"-u", "WEZTERM_PANE",
+		"-u", "WEZTERM_EXECUTABLE",
+	}
+	return append(prefix, cmd...)
+}
+

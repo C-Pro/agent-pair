@@ -60,6 +60,10 @@ func (t *TmuxMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 		PaneID:  paneID,
 	}
 
+	// Disable allow-passthrough on the created pane to prevent terminal queries
+	// (e.g. Kitty graphics, XTGETTCAP, DECRPM) from leaking responses into the active pane.
+	_ = exec.Command("tmux", "set-option", "-p", "-t", paneID, "allow-passthrough", "off").Run()
+
 	if opts.Title != "" {
 		_ = exec.Command("tmux", "select-pane", "-t", paneID, "-T", opts.Title).Run()
 	}

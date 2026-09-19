@@ -165,6 +165,7 @@ func runStart(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to build launch command: %w", err)
 	}
+	cmd = agent.SanitizeLaunchCommand(cmd)
 
 	title := fmt.Sprintf("[pair:%s]", fCallsign)
 	fmt.Printf("==> Launching %s (%s) in %s pane...\n", followerAdapter.Name(), fCallsign, m.Name())
