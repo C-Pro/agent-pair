@@ -34,8 +34,8 @@ func (c *ClaudeAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[stri
 	}
 
 	if opts.ReadOnly {
-		// Restrict Claude Code to inspection/viewing tools
-		cmd = append(cmd, "--allowed-tools", "View,GlobTool,GrepTool")
+		// Native plan mode in Claude Code with edit/write/bash explicitly disallowed
+		cmd = append(cmd, "--permission-mode", "plan", "--disallowed-tools", "Edit,Write,Bash")
 	}
 
 	return cmd, nil, nil
