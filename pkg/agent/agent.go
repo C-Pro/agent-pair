@@ -8,6 +8,7 @@ import (
 // LaunchOptions provides settings for constructing an agent CLI command.
 type LaunchOptions struct {
 	Model    string
+	Effort   string
 	ReadOnly bool
 	Cwd      string
 	Callsign string
@@ -123,5 +124,3 @@ func DeriveCallsign(model string, fallback string) string {
 	}
 	return s
 }
-
-

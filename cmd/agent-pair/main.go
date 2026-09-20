@@ -93,6 +93,7 @@ func runStart(args []string) error {
 	followerName := fs.String("follower", "opencode", "Follower agent (opencode, agy, claude, codex)")
 	leaderName := fs.String("leader", "agy", "Leader agent (agy, opencode, claude, codex)")
 	model := fs.String("model", "", "Model identifier for follower")
+	effort := fs.String("effort", "", "Follower reasoning effort (low, medium, high)")
 	leaderModelFlag := fs.String("leader-model", "", "Model identifier for leader")
 	followerCallsign := fs.String("follower-callsign", "", "Explicit callsign for follower (defaults to model name)")
 	leaderCallsign := fs.String("leader-callsign", "", "Explicit callsign for leader (defaults to model name)")
@@ -149,6 +150,10 @@ func runStart(args []string) error {
 	if targetModel == "" && followerAdapter.Name() == "opencode" {
 		targetModel = "opencode/muse-spark-1.3-contributor-free"
 	}
+	targetEffort := *effort
+	if targetEffort == "" {
+		targetEffort = os.Getenv("AGENT_PAIR_EFFORT")
+	}
 
 	// Resolve callsigns: always follow model names unless explicitly overridden
 	fCallsign := *followerCallsign
@@ -168,6 +173,7 @@ func runStart(args []string) error {
 	// Build follower launch command
 	cmd, _, err := followerAdapter.BuildLaunchCommand(agent.LaunchOptions{
 		Model:    targetModel,
+		Effort:   targetEffort,
 		ReadOnly: *readOnly,
 		Cwd:      targetCwd,
 		Callsign: fCallsign,

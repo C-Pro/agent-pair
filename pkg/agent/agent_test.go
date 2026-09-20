@@ -242,13 +242,16 @@ func TestAgyAgent(t *testing.T) {
 	}
 
 	// BuildLaunchCommand
-	cmd, _, err := aa.BuildLaunchCommand(LaunchOptions{Model: "gemini-pro", ReadOnly: true})
+	cmd, _, err := aa.BuildLaunchCommand(LaunchOptions{Model: "gemini-pro", Effort: "high", ReadOnly: true})
 	if err != nil {
 		t.Fatalf("BuildLaunchCommand failed: %v", err)
 	}
 	cmdStr := strings.Join(cmd, " ")
-	if !strings.Contains(cmdStr, "--model gemini-pro") || !strings.Contains(cmdStr, "--mode plan --sandbox") {
+	if !strings.Contains(cmdStr, "--model gemini-pro") || !strings.Contains(cmdStr, "--effort high") || !strings.Contains(cmdStr, "--mode plan --sandbox") {
 		t.Errorf("unexpected command: %v", cmdStr)
+	}
+	if _, _, err := aa.BuildLaunchCommand(LaunchOptions{Effort: "extreme"}); err == nil {
+		t.Fatal("expected invalid effort to fail")
 	}
 
 	cmd2, _, _ := aa.BuildLaunchCommand(LaunchOptions{})

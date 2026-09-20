@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -39,6 +40,14 @@ func (a *AgyAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[string]
 
 	if opts.Model != "" {
 		cmd = append(cmd, "--model", opts.Model)
+	}
+	if opts.Effort != "" {
+		switch opts.Effort {
+		case "low", "medium", "high":
+			cmd = append(cmd, "--effort", opts.Effort)
+		default:
+			return nil, nil, fmt.Errorf("invalid agy effort %q (available: low, medium, high)", opts.Effort)
+		}
 	}
 
 	if opts.ReadOnly {
