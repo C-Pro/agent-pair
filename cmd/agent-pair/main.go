@@ -179,6 +179,18 @@ func runStart(args []string) error {
 
 	title := fmt.Sprintf("[pair:%s]", fCallsign)
 	fmt.Printf("==> Launching %s (%s) in %s pane...\n", followerAdapter.Name(), fCallsign, m.Name())
+	if existing != nil && *force {
+		oldMux, err := mux.Get(existing.MuxName)
+		if err != nil {
+			return fmt.Errorf("failed to resolve existing session multiplexer: %w", err)
+		}
+		if err := oldMux.ClosePane(existing.PaneHandle); err != nil {
+			return fmt.Errorf("failed to close existing follower pane: %w", err)
+		}
+		if err := session.Clear(); err != nil {
+			return fmt.Errorf("failed to clear existing session: %w", err)
+		}
+	}
 
 	// Create pane and launch follower
 	handle, err := m.CreatePane(mux.PaneOptions{
@@ -191,6 +203,13 @@ func runStart(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create pane: %w", err)
 	}
+	startupComplete := false
+	defer func() {
+		if !startupComplete {
+			_ = m.ClosePane(handle)
+			_ = session.Clear()
+		}
+	}()
 
 	// Wait for agent to become ready
 	fmt.Printf("==> Waiting for %s to initialize (timeout %ds)...\n", fCallsign, *timeoutSec)
@@ -274,6 +293,7 @@ func runStart(args []string) error {
 	fmt.Printf("    Leader:   %s (%s)\n", leaderAdapter.Name(), lCallsign)
 	fmt.Printf("    Follower: %s (%s, model: %s)\n", followerAdapter.Name(), fCallsign, targetModel)
 	fmt.Printf("    Channel:  %s (pane: %s)\n", m.Name(), handle.PaneID)
+	startupComplete = true
 	return nil
 }
 

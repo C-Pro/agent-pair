@@ -52,6 +52,12 @@ case "$cmd" in
     if [ -f "$state_file" ]; then count=$(cat "$state_file"); fi
     echo $((count + 1)) > "$state_file"
     ;;
+  set-buffer|load-buffer)
+    if [ "$AGENT_PAIR_MOCK_SEND_FAIL" = "1" ]; then exit 1; fi
+    ;;
+  kill-pane)
+    echo "$*" > "$XDG_CACHE_HOME/tmux-killed"
+    ;;
   *)
     exit 0
     ;;
@@ -86,6 +92,7 @@ exit 0
 
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TMUX", "/tmp/tmux-mock/default,1,0")
+	t.Setenv("AGENT_PAIR_MOCK_SEND_FAIL", "0")
 	return tempDir
 }
 
@@ -442,6 +449,29 @@ func TestRunStart(t *testing.T) {
 		err3 := runStart([]string{"-mux", "tmux", "-force", "-timeout", "5", "-no-bootstrap"})
 		if err3 != nil {
 			t.Errorf("expected --force to succeed, got %v", err3)
+		}
+		if _, err := os.Stat(filepath.Join(os.Getenv("XDG_CACHE_HOME"), "tmux-killed")); err != nil {
+			t.Errorf("expected --force to close the previous pane: %v", err)
+		}
+	})
+
+	t.Run("startup failure cleans pane and session", func(t *testing.T) {
+		if err := session.Clear(); err != nil {
+			t.Fatalf("failed to clear prior test session: %v", err)
+		}
+		killRecord := filepath.Join(os.Getenv("XDG_CACHE_HOME"), "tmux-killed")
+		_ = os.Remove(killRecord)
+		t.Setenv("AGENT_PAIR_MOCK_SEND_FAIL", "1")
+
+		err := runStart([]string{"-mux", "tmux", "-leader", "agy", "-follower", "opencode", "-timeout", "2"})
+		if err == nil || !strings.Contains(err.Error(), "failed to send bootstrap prompt") {
+			t.Fatalf("expected bootstrap send failure, got %v", err)
+		}
+		if session.Exists() {
+			t.Fatal("startup failure left session metadata behind")
+		}
+		if _, err := os.Stat(killRecord); err != nil {
+			t.Fatalf("startup failure did not close the pane: %v", err)
 		}
 	})
 }
