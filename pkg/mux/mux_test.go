@@ -206,6 +206,14 @@ func TestTmuxDetectActive(t *testing.T) {
 	}
 }
 
+func TestShellCommandQuotesEveryArgument(t *testing.T) {
+	got := shellCommand([]string{"agy", "--model", "gemini; touch /tmp/pwned", "it's-safe"})
+	want := `exec 'agy' '--model' 'gemini; touch /tmp/pwned' 'it'"'"'s-safe'`
+	if got != want {
+		t.Fatalf("shellCommand() = %q, want %q", got, want)
+	}
+}
+
 func TestZellijMuxWhenUnavailable(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	zm := &ZellijMux{}

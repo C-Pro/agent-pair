@@ -47,6 +47,9 @@ func (t *TmuxMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 	if opts.Cwd != "" {
 		args = append(args, "-c", opts.Cwd)
 	}
+	if len(opts.Command) > 0 {
+		args = append(args, "--", shellCommand(opts.Command))
+	}
 
 	cmd := exec.Command("tmux", args...)
 	out, err := cmd.CombinedOutput()
@@ -68,15 +71,17 @@ func (t *TmuxMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 		_ = exec.Command("tmux", "select-pane", "-t", paneID, "-T", opts.Title).Run()
 	}
 
-	if len(opts.Command) > 0 {
-		// Launch the command in the pane
-		fullCmd := strings.Join(opts.Command, " ")
-		if err := t.SendText(handle, fullCmd); err != nil {
-			return nil, fmt.Errorf("failed to send launch command to tmux pane: %w", err)
-		}
-	}
-
 	return handle, nil
+}
+
+// shellCommand builds one safely quoted shell command for tmux. tmux accepts a
+// shell-command rather than an argv array, so every argument must be quoted.
+func shellCommand(argv []string) string {
+	quoted := make([]string, 0, len(argv))
+	for _, arg := range argv {
+		quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "'\"'\"'")+"'")
+	}
+	return "exec " + strings.Join(quoted, " ")
 }
 
 func (t *TmuxMux) SendText(handle *PaneHandle, text string) error {
