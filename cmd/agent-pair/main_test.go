@@ -160,9 +160,17 @@ func TestRunModels(t *testing.T) {
 	}
 
 	// Explicit claude
-	if err := runModels([]string{"claude"}); err != nil {
-		t.Fatalf("runModels(claude) failed: %v", err)
-	}
+	t.Run("claude", func(t *testing.T) {
+		if os.Getenv("CI") == "true" {
+			t.Skip("skipping in CI: agent binary for claude is missing")
+		}
+		if _, err := exec.LookPath("claude"); err != nil {
+			t.Skip("claude binary not available on PATH")
+		}
+		if err := runModels([]string{"claude"}); err != nil {
+			t.Fatalf("runModels(claude) failed: %v", err)
+		}
+	})
 
 	// Unknown agent
 	if err := runModels([]string{"unknown-agent"}); err == nil {

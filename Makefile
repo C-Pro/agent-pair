@@ -19,13 +19,14 @@ install: build
 	install -m 755 bin/agent-pair $(BINDIR)/agent-pair
 	mkdir -p $(SKILLSDIR)
 	rm -rf $(SKILLSDIR)/pair-agentic-programming
-	ln -sfn $(CURDIR)/skills/pair-agentic-programming $(SKILLSDIR)/pair-agentic-programming
+	cp -R $(CURDIR)/skills/pair-agentic-programming $(SKILLSDIR)/pair-agentic-programming
 	@if [ -d "$(HOME)/.gemini/config" ]; then \
 		mkdir -p $(GEMINIDIR); \
-		ln -sfn $(CURDIR)/skills/pair-agentic-programming $(GEMINIDIR)/pair-agentic-programming; \
+		rm -rf $(GEMINIDIR)/pair-agentic-programming; \
+		cp -R $(CURDIR)/skills/pair-agentic-programming $(GEMINIDIR)/pair-agentic-programming; \
 	fi
 	@echo "==> Installed agent-pair to $(BINDIR)/agent-pair"
-	@echo "==> Linked skill to $(SKILLSDIR)/pair-agentic-programming"
+	@echo "==> Copied skill to $(SKILLSDIR)/pair-agentic-programming"
 
 clean:
 	rm -rf bin

@@ -80,6 +80,7 @@ jobs:
           mkdir -p "dist/${DIST_NAME}"
           go build -ldflags="-s -w -X main.version=${TAG}" -o "dist/${DIST_NAME}/${BIN_NAME}" ./cmd/agent-pair
           cp README.md LICENSE "dist/${DIST_NAME}/"
+          cp -r skills "dist/${DIST_NAME}/"
           
           cd dist
           if [ "${{ matrix.goos }}" = "windows" ]; then

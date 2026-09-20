@@ -1,7 +1,6 @@
 # Agent-Pair: Multi-Agent Pair Programming CLI & Skill
 
-[![Go](https://img.shields.io/badge/go-1.22%2B-blue.svg)](https://golang.org)
-[![Release](https://img.shields.io/github/v/release/cpro/agent-pair?include_prereleases&style=flat-square)](https://github.com/cpro/agent-pair/releases)
+[![Release](https://github.com/C-Pro/agent-pair/actions/workflows/release.yml/badge.svg)](https://github.com/C-Pro/agent-pair/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Agent-Pair** is an extensible tool and agent skill that enables real-time, inter-process pair programming between autonomous AI coding agents.

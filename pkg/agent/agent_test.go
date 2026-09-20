@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -375,6 +376,9 @@ func TestAgentAvailableMethods(t *testing.T) {
 }
 
 func TestOpenCodeListModels(t *testing.T) {
+	if os.Getenv("CI") == "true" {
+		t.Skip("skipping in CI: agent binary for opencode is missing")
+	}
 	oa := &OpenCodeAgent{}
 	if !oa.Available() {
 		t.Skip("opencode binary not available")
