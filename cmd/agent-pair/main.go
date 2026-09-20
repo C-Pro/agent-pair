@@ -76,8 +76,8 @@ AGENTS SUPPORTED:
   opencode, agy, claude, codex
 
 EXAMPLES:
-  # Start a session with opencode using default muse model in tmux/zellij/herdr
-  agent-pair start --follower opencode --model opencode/muse-spark-1.3-contributor-free
+  # Start a session with OpenCode using its Muse model in tmux/zellij/herdr
+  agent-pair start --leader codex --follower opencode --model opencode/muse-spark-1.3-contributor-free
 
   # Send a turn and wait for reply
   agent-pair turn "What are the tradeoffs of using Go channels vs mutexes here?"
@@ -91,7 +91,7 @@ func runStart(args []string) error {
 
 	muxName := fs.String("mux", "auto", "Multiplexer to use (auto, tmux, zellij, herdr)")
 	followerName := fs.String("follower", "opencode", "Follower agent (opencode, agy, claude, codex)")
-	leaderName := fs.String("leader", "agy", "Leader agent (agy, opencode, claude, codex)")
+	leaderName := fs.String("leader", "auto", "Leader agent (auto, agy, opencode, claude, codex)")
 	model := fs.String("model", "", "Model identifier for follower")
 	effort := fs.String("effort", "", "Follower reasoning effort (low, medium, high)")
 	leaderModelFlag := fs.String("leader-model", "", "Model identifier for leader")
@@ -140,7 +140,7 @@ func runStart(args []string) error {
 	}
 
 	// Resolve leader agent adapter
-	leaderAdapter, err := agent.Get(*leaderName)
+	leaderAdapter, err := resolveLeader(*leaderName)
 	if err != nil {
 		return err
 	}
@@ -164,8 +164,8 @@ func runStart(args []string) error {
 	lCallsign := *leaderCallsign
 	if lCallsign == "" {
 		lModel := *leaderModelFlag
-		if lModel == "" && leaderAdapter.Name() == "agy" {
-			lModel = os.Getenv("GEMINI_MODEL")
+		if lModel == "" {
+			lModel = leaderModelFromEnv(leaderAdapter.Name())
 		}
 		lCallsign = agent.DeriveCallsign(lModel, leaderAdapter.DefaultCallsign(""))
 	}
@@ -301,6 +301,57 @@ func runStart(args []string) error {
 	fmt.Printf("    Channel:  %s (pane: %s)\n", m.Name(), handle.PaneID)
 	startupComplete = true
 	return nil
+}
+
+func resolveLeader(name string) (agent.AgentAdapter, error) {
+	if name != "auto" {
+		return agent.Get(name)
+	}
+
+	if configured := os.Getenv("AGENT_PAIR_LEADER"); configured != "" {
+		return agent.Get(configured)
+	}
+
+	type indicator struct {
+		agent string
+		envs  []string
+	}
+	indicators := []indicator{
+		{agent: "codex", envs: []string{"CODEX_SESSION_ID", "CODEX_THREAD_ID"}},
+		{agent: "claude", envs: []string{"CLAUDECODE"}},
+		{agent: "opencode", envs: []string{"OPENCODE"}},
+		{agent: "agy", envs: []string{"AGY_SESSION_ID", "ANTIGRAVITY_SESSION_ID"}},
+	}
+
+	detected := ""
+	for _, candidate := range indicators {
+		for _, envName := range candidate.envs {
+			if os.Getenv(envName) == "" {
+				continue
+			}
+			if detected != "" && detected != candidate.agent {
+				return nil, fmt.Errorf("ambiguous leader environment (%s and %s); pass --leader explicitly", detected, candidate.agent)
+			}
+			detected = candidate.agent
+			break
+		}
+	}
+	if detected != "" {
+		return agent.Get(detected)
+	}
+
+	return nil, fmt.Errorf("could not detect the leader; pass --leader agy, opencode, claude, or codex")
+}
+
+func leaderModelFromEnv(leader string) string {
+	if model := os.Getenv("AGENT_PAIR_LEADER_MODEL"); model != "" {
+		return model
+	}
+
+	if leader == "agy" {
+		return os.Getenv("GEMINI_MODEL")
+	}
+	return ""
 }
 
 func readMessageFromArgsOrStdin(args []string) (string, error) {

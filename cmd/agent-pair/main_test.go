@@ -89,10 +89,14 @@ exit 0
 	if err := os.WriteFile(filepath.Join(binDir, "agy"), []byte(agyScript), 0755); err != nil {
 		t.Fatalf("failed to write mock agy: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(binDir, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write mock codex: %v", err)
+	}
 
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TMUX", "/tmp/tmux-mock/default,1,0")
 	t.Setenv("AGENT_PAIR_MOCK_SEND_FAIL", "0")
+	t.Setenv("AGENT_PAIR_LEADER", "agy")
 	return tempDir
 }
 
@@ -147,6 +151,52 @@ func TestReadMessageFromArgsOrStdin(t *testing.T) {
 			t.Errorf("got %q, want ''", msg)
 		}
 	})
+}
+
+func TestResolveLeader(t *testing.T) {
+	setupTestEnv(t)
+	for _, key := range []string{"CODEX_SESSION_ID", "CODEX_THREAD_ID", "CLAUDECODE", "OPENCODE", "AGY_SESSION_ID", "ANTIGRAVITY_SESSION_ID"} {
+		t.Setenv(key, "")
+	}
+
+	t.Setenv("AGENT_PAIR_LEADER", "agy")
+	leader, err := resolveLeader("auto")
+	if err != nil {
+		t.Fatalf("resolveLeader(auto) returned error: %v", err)
+	}
+	if leader.Name() != "agy" {
+		t.Errorf("leader = %q, want agy", leader.Name())
+	}
+
+	t.Setenv("AGENT_PAIR_LEADER", "")
+	t.Setenv("CODEX_SESSION_ID", "session-1")
+	leader, err = resolveLeader("auto")
+	if err != nil || leader.Name() != "codex" {
+		t.Fatalf("runtime Codex detection = %v, %v", leader, err)
+	}
+
+	t.Setenv("CLAUDECODE", "1")
+	if _, err := resolveLeader("auto"); err == nil || !strings.Contains(err.Error(), "ambiguous leader environment") {
+		t.Fatalf("expected ambiguous environment error, got %v", err)
+	}
+
+	t.Setenv("CODEX_SESSION_ID", "")
+	t.Setenv("CLAUDECODE", "")
+	if _, err := resolveLeader("auto"); err == nil {
+		t.Fatal("resolveLeader(auto) succeeded without a detectable leader")
+	}
+}
+
+func TestLeaderModelFromEnv(t *testing.T) {
+	t.Setenv("AGENT_PAIR_LEADER_MODEL", "")
+	t.Setenv("GEMINI_MODEL", "gemini-3.8-flash")
+	if got := leaderModelFromEnv("agy"); got != "gemini-3.8-flash" {
+		t.Errorf("leaderModelFromEnv(agy) = %q", got)
+	}
+	t.Setenv("AGENT_PAIR_LEADER_MODEL", "override")
+	if got := leaderModelFromEnv("codex"); got != "override" {
+		t.Errorf("leader model override = %q", got)
+	}
 }
 
 func TestPrintUsage(t *testing.T) {
