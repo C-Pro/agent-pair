@@ -155,9 +155,22 @@ func (t *TmuxMux) ClosePane(handle *PaneHandle) error {
 	if !t.Available() {
 		return fmt.Errorf("tmux is not installed")
 	}
+	if handle == nil || handle.PaneID == "" {
+		return nil
+	}
+	alive, err := t.PaneAlive(handle)
+	if err != nil {
+		return err
+	}
+	if !alive {
+		return nil
+	}
 
 	cmd := exec.Command("tmux", "kill-pane", "-t", handle.PaneID)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if stillAlive, checkErr := t.PaneAlive(handle); checkErr == nil && !stillAlive {
+			return nil
+		}
 		return fmt.Errorf("tmux kill-pane failed: %w (output: %s)", err, string(out))
 	}
 	return nil

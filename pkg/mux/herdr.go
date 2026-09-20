@@ -123,9 +123,22 @@ func (h *HerdrMux) ClosePane(handle *PaneHandle) error {
 	if !h.Available() {
 		return fmt.Errorf("herdr is not installed")
 	}
+	if handle == nil || handle.PaneID == "" {
+		return nil
+	}
+	alive, err := h.PaneAlive(handle)
+	if err != nil {
+		return err
+	}
+	if !alive {
+		return nil
+	}
 
 	cmd := exec.Command("herdr", "pane", "close", handle.PaneID)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if stillAlive, checkErr := h.PaneAlive(handle); checkErr == nil && !stillAlive {
+			return nil
+		}
 		return fmt.Errorf("herdr pane close failed: %w (output: %s)", err, string(out))
 	}
 	return nil

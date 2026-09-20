@@ -144,11 +144,21 @@ func (z *ZellijMux) ClosePane(handle *PaneHandle) error {
 		return fmt.Errorf("zellij is not installed")
 	}
 	if handle == nil || handle.PaneID == "" {
-		return fmt.Errorf("cannot close zellij pane without a pane ID")
+		return nil
+	}
+	alive, err := z.PaneAlive(handle)
+	if err != nil {
+		return err
+	}
+	if !alive {
+		return nil
 	}
 
 	cmd := exec.Command("zellij", "action", "close-pane", "-p", handle.PaneID)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if stillAlive, checkErr := z.PaneAlive(handle); checkErr == nil && !stillAlive {
+			return nil
+		}
 		return fmt.Errorf("zellij close-pane failed: %w (output: %s)", err, string(out))
 	}
 	return nil

@@ -521,8 +521,8 @@ func TestZellijMuxOperations(t *testing.T) {
 	if err := zm.ClosePane(handleH); err != nil {
 		t.Fatalf("ClosePane failed: %v", err)
 	}
-	if err := zm.ClosePane(&PaneHandle{}); err == nil {
-		t.Fatal("ClosePane accepted an empty pane ID")
+	if err := zm.ClosePane(&PaneHandle{}); err != nil {
+		t.Fatalf("ClosePane should be idempotent for an empty pane: %v", err)
 	}
 }
 
