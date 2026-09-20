@@ -485,8 +485,8 @@ func TestRunStart(t *testing.T) {
 			"-follower", "opencode",
 			"-leader", "agy",
 			"-timeout", "5",
-			"-leader-callsign", "test-leader",
-			"-follower-callsign", "test-follower",
+			"-leader-callsign", "gemini",
+			"-follower-callsign", "muse",
 		})
 		if err != nil {
 			t.Fatalf("runStart failed: %v", err)
@@ -494,6 +494,13 @@ func TestRunStart(t *testing.T) {
 
 		if !session.Exists() {
 			t.Fatalf("expected session to exist after start")
+		}
+		started, err := session.Load()
+		if err != nil {
+			t.Fatalf("failed to reload started session: %v", err)
+		}
+		if started.ResponseBaseline != 1 {
+			t.Fatalf("bootstrap response baseline = %d, want 1", started.ResponseBaseline)
 		}
 
 		// Existing session without --force should fail

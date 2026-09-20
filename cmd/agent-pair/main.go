@@ -274,6 +274,7 @@ func runStart(args []string) error {
 
 		fmt.Printf("==> Awaiting protocol acknowledgment...\n")
 		ackDone := false
+		ackBaseline := baseline
 		ackStart := time.Now()
 		for time.Since(ackStart) < timeout {
 			time.Sleep(1 * time.Second)
@@ -281,8 +282,10 @@ func runStart(args []string) error {
 			if err != nil {
 				continue
 			}
-			if protocol.CountTurnEndMarkers(output, fCallsign) > baseline && followerAdapter.IsTurnFinished(output, fCallsign) {
+			markerCount := protocol.CountTurnEndMarkers(output, fCallsign)
+			if markerCount > baseline && followerAdapter.IsTurnFinished(output, fCallsign) {
 				ackDone = true
+				ackBaseline = markerCount
 				if body, found := protocol.ExtractLatestTurn(output, fCallsign, lCallsign); found {
 					fmt.Printf("\n[ %s ACK RECEIVED ]\n%s\n\n", fCallsign, body)
 				}
@@ -292,6 +295,11 @@ func runStart(args []string) error {
 
 		if !ackDone {
 			fmt.Printf("Warning: ACK marker not detected yet, but session is initialized.\n")
+		} else {
+			sess.ResponseBaseline = ackBaseline
+			if err := session.Save(sess); err != nil {
+				return fmt.Errorf("failed to save bootstrap response watermark: %w", err)
+			}
 		}
 	}
 
