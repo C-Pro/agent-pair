@@ -100,7 +100,9 @@ func Clear() error {
 	if err != nil {
 		return err
 	}
-	_ = os.Remove(file)
+	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
 

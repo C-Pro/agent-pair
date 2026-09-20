@@ -188,3 +188,18 @@ func TestSessionIsScopedToLeaderPane(t *testing.T) {
 		t.Fatal("session was not found in its original leader pane")
 	}
 }
+
+func TestClearReturnsRemoveError(t *testing.T) {
+	cacheRoot := setupTestCacheDir(t)
+	if err := Save(&Session{ID: "cannot-remove"}); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+	sessionDir := filepath.Join(cacheRoot, "agent-pair")
+	if err := os.Chmod(sessionDir, 0500); err != nil {
+		t.Fatalf("Chmod() failed: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(sessionDir, 0700) })
+	if err := Clear(); err == nil {
+		t.Fatal("Clear() suppressed session removal failure")
+	}
+}

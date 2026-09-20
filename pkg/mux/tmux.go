@@ -157,6 +157,8 @@ func (t *TmuxMux) ClosePane(handle *PaneHandle) error {
 	}
 
 	cmd := exec.Command("tmux", "kill-pane", "-t", handle.PaneID)
-	_ = cmd.Run()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux kill-pane failed: %w (output: %s)", err, string(out))
+	}
 	return nil
 }

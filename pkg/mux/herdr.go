@@ -125,6 +125,8 @@ func (h *HerdrMux) ClosePane(handle *PaneHandle) error {
 	}
 
 	cmd := exec.Command("herdr", "pane", "close", handle.PaneID)
-	_ = cmd.Run()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("herdr pane close failed: %w (output: %s)", err, string(out))
+	}
 	return nil
 }

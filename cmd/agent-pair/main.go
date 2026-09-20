@@ -511,17 +511,29 @@ func runStop(args []string) error {
 		return err
 	}
 
+	var cleanupErrs []error
 	followerAdapter, err := agent.Get(sess.FollowerAgent)
 	if err != nil {
 		// Fallback to exit
-		_ = m.SendText(sess.PaneHandle, "exit")
+		if sendErr := m.SendText(sess.PaneHandle, "exit"); sendErr != nil {
+			cleanupErrs = append(cleanupErrs, fmt.Errorf("failed to ask follower to exit: %w", sendErr))
+		}
 	} else {
-		_ = m.SendText(sess.PaneHandle, followerAdapter.StopCommand())
+		if sendErr := m.SendText(sess.PaneHandle, followerAdapter.StopCommand()); sendErr != nil {
+			cleanupErrs = append(cleanupErrs, fmt.Errorf("failed to ask follower to exit: %w", sendErr))
+		}
 	}
 
 	time.Sleep(1 * time.Second)
-	_ = m.ClosePane(sess.PaneHandle)
-	_ = session.Clear()
+	if closeErr := m.ClosePane(sess.PaneHandle); closeErr != nil {
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("failed to close follower pane: %w", closeErr))
+	}
+	if clearErr := session.Clear(); clearErr != nil {
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("failed to clear session state: %w", clearErr))
+	}
+	if len(cleanupErrs) > 0 {
+		return errors.Join(cleanupErrs...)
+	}
 
 	fmt.Printf("==> Pair programming session closed cleanly.\n")
 	return nil
