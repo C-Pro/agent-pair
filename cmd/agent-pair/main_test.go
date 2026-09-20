@@ -29,12 +29,25 @@ func setupTestEnv(t *testing.T) string {
 	tmuxScript := `#!/bin/sh
 cmd="$1"
 shift
+state_file="$XDG_CACHE_HOME/tmux-response-count"
 case "$cmd" in
   split-window)
     echo "%42"
     ;;
   capture-pane)
-    echo "OpenCode Ask anything\n[ CQ muse -> gemini ]\nReady for pair programming as muse. Standing by.\n[ muse over ]"
+    echo "OpenCode Ask anything"
+    count=0
+    if [ -f "$state_file" ]; then count=$(cat "$state_file"); fi
+    i=0
+    while [ "$i" -lt "$count" ]; do
+      echo "[ CQ muse -> gemini ]\nresponse $i\n[ muse over ]"
+      i=$((i + 1))
+    done
+    ;;
+  send-keys)
+    count=0
+    if [ -f "$state_file" ]; then count=$(cat "$state_file"); fi
+    echo $((count + 1)) > "$state_file"
     ;;
   *)
     exit 0
@@ -258,7 +271,7 @@ func TestRunSend(t *testing.T) {
 }
 
 func TestRunWait(t *testing.T) {
-	setupTestEnv(t)
+	tempDir := setupTestEnv(t)
 
 	// No session
 	if err := runWait([]string{"-timeout", "1"}); err == nil || !strings.Contains(err.Error(), "no active pair session") {
@@ -283,6 +296,9 @@ func TestRunWait(t *testing.T) {
 	}
 	if err := session.Save(sess); err != nil {
 		t.Fatalf("session.Save failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "tmux-response-count"), []byte("1\n"), 0644); err != nil {
+		t.Fatalf("failed to seed mock response: %v", err)
 	}
 
 	// Wait with extraction

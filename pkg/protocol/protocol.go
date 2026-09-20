@@ -43,29 +43,19 @@ You are participating in an agentic pair programming session.
 - Working Directory: %s
 %s
 COMMUNICATION PROTOCOL RULES:
-1. Every message you send MUST begin on a new line with:
-   [ CQ %s -> %s ]
-2. Every message you send MUST end on a new line with:
-   [ %s over ]
-3. When ending the entire session, conclude with:
-   [ %s out ]
-4. Be concise, direct, and constructive. Provide concrete code suggestions, architectural critique, and alternatives.
+1. Every message must use this envelope, replacing the placeholders with the callsigns above:
+   [ CQ {your-callsign} -> {partner-callsign} ]
+   {response body}
+   [ {your-callsign} over ]
+2. When ending the entire session, replace "over" with "out".
+3. Be concise, direct, and constructive. Provide concrete code suggestions, architectural critique, and alternatives.
 
-Please acknowledge receipt of this protocol by responding now with:
-[ CQ %s -> %s ]
-Ready for pair programming as %s. Standing by.
-[ %s over ]`,
+Please acknowledge receipt now using that envelope and this response body:
+Ready for pair programming as %s. Standing by.`,
 		followerCallsign,
 		leaderCallsign,
 		workingDir,
 		roConstraint,
-		followerCallsign,
-		leaderCallsign,
-		followerCallsign,
-		followerCallsign,
-		followerCallsign,
-		leaderCallsign,
-		followerCallsign,
 		followerCallsign,
 	)
 }
@@ -126,4 +116,16 @@ func HasTurnFinished(screen string, sender string) bool {
 	)
 	re := regexp.MustCompile(overPattern)
 	return re.MatchString(cleaned)
+}
+
+// CountTurnEndMarkers returns the number of completed response markers from a
+// sender in captured terminal output. Callers use a pre-send count as a
+// watermark so markers left in scrollback cannot complete a later turn.
+func CountTurnEndMarkers(screen string, sender string) int {
+	cleaned := StripANSI(screen)
+	pattern := fmt.Sprintf(`(?i)(?:\[\s*%s\s*(?:over|out)\s*\]|\b%s\s+(?:over|out)\b)`,
+		regexp.QuoteMeta(sender),
+		regexp.QuoteMeta(sender),
+	)
+	return len(regexp.MustCompile(pattern).FindAllStringIndex(cleaned, -1))
 }

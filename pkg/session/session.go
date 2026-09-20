@@ -23,6 +23,7 @@ type Session struct {
 	Cwd              string          `json:"cwd"`
 	ReadOnly         bool            `json:"read_only"`
 	CreatedAt        time.Time       `json:"created_at"`
+	ResponseBaseline int             `json:"response_marker_baseline,omitempty"`
 }
 
 func getSessionFile() (string, error) {

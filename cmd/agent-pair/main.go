@@ -233,6 +233,10 @@ func runStart(args []string) error {
 	// Initial bootstrap handshake
 	if !*noBootstrap {
 		fmt.Printf("==> Transmitting protocol handshake to %s...\n", fCallsign)
+		baseline := 0
+		if output, captureErr := m.CaptureOutput(handle); captureErr == nil {
+			baseline = protocol.CountTurnEndMarkers(output, fCallsign)
+		}
 		bootstrap := protocol.FormatBootstrapPrompt(lCallsign, fCallsign, targetCwd, *readOnly)
 		if err := m.SendText(handle, bootstrap); err != nil {
 			return fmt.Errorf("failed to send bootstrap prompt: %w", err)
@@ -247,7 +251,7 @@ func runStart(args []string) error {
 			if err != nil {
 				continue
 			}
-			if followerAdapter.IsTurnFinished(output, fCallsign) {
+			if protocol.CountTurnEndMarkers(output, fCallsign) > baseline && followerAdapter.IsTurnFinished(output, fCallsign) {
 				ackDone = true
 				if body, found := protocol.ExtractLatestTurn(output, fCallsign, lCallsign); found {
 					fmt.Printf("\n[ %s ACK RECEIVED ]\n%s\n\n", fCallsign, body)
@@ -302,6 +306,15 @@ func runSend(args []string) error {
 		return err
 	}
 
+	output, err := m.CaptureOutput(sess.PaneHandle)
+	if err != nil {
+		return fmt.Errorf("failed to capture follower output before sending turn: %w", err)
+	}
+	sess.ResponseBaseline = protocol.CountTurnEndMarkers(output, sess.FollowerCallsign)
+	if err := session.Save(sess); err != nil {
+		return fmt.Errorf("failed to save response watermark: %w", err)
+	}
+
 	formatted := protocol.FormatTurn(sess.LeaderCallsign, sess.FollowerCallsign, msg)
 	if err := m.SendText(sess.PaneHandle, formatted); err != nil {
 		return fmt.Errorf("failed to send turn message: %w", err)
@@ -346,7 +359,7 @@ func runWait(args []string) error {
 			continue
 		}
 
-		if followerAdapter.IsTurnFinished(output, sess.FollowerCallsign) {
+		if protocol.CountTurnEndMarkers(output, sess.FollowerCallsign) > sess.ResponseBaseline && followerAdapter.IsTurnFinished(output, sess.FollowerCallsign) {
 			if *raw {
 				fmt.Println(output)
 				return nil

@@ -244,3 +244,17 @@ func TestHasTurnFinished(t *testing.T) {
 		})
 	}
 }
+
+func TestCountTurnEndMarkers(t *testing.T) {
+	screen := "[ muse over ]\nold output\n[ muse out ]\n[ codex over ]"
+	if got := CountTurnEndMarkers(screen, "muse"); got != 2 {
+		t.Fatalf("CountTurnEndMarkers() = %d, want 2", got)
+	}
+}
+
+func TestBootstrapDoesNotEchoConcreteFollowerMarkers(t *testing.T) {
+	prompt := FormatBootstrapPrompt("codex", "gemini-3.8-flash", "/tmp/repo", true)
+	if CountTurnEndMarkers(prompt, "gemini-3.8-flash") != 0 {
+		t.Fatal("bootstrap prompt contains a concrete follower completion marker")
+	}
+}
