@@ -33,7 +33,7 @@ func FormatTurn(sender, recipient, message string) string {
 func FormatBootstrapPrompt(leaderCallsign, followerCallsign, workingDir string, readOnly bool) string {
 	roConstraint := ""
 	if readOnly {
-		roConstraint = "- You have READ-ONLY permissions. DO NOT create, modify, or delete any files, and DO NOT run destructive shell commands. You can read, inspect, and analyze code freely.\n"
+		roConstraint = "- You have READ-ONLY permissions. DO NOT create, modify, or delete any files, and DO NOT run destructive shell commands, execute or compile code. You can read, inspect, and analyze code freely.\n"
 	}
 
 	return fmt.Sprintf(`[ PROTOCOL INITIALIZATION ]
@@ -127,4 +127,3 @@ func HasTurnFinished(screen string, sender string) bool {
 	re := regexp.MustCompile(overPattern)
 	return re.MatchString(cleaned)
 }
-
