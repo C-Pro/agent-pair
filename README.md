@@ -7,6 +7,8 @@
 
 It uses terminal multiplexer panes (**tmux**, **zellij**, or **herdr**) as visual IPC channels to pair a **Lead Agent** (e.g. Antigravity / `gemini`) with a **Follower Agent** (e.g. OpenCode / `muse`, Claude Code, or Codex).
 
+![Agent-Pair Demo](assets/demo.gif)
+
 ---
 
 ## Key Features
