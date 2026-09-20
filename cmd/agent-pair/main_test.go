@@ -155,7 +155,7 @@ func TestReadMessageFromArgsOrStdin(t *testing.T) {
 
 func TestResolveLeader(t *testing.T) {
 	setupTestEnv(t)
-	for _, key := range []string{"CODEX_SESSION_ID", "CODEX_THREAD_ID", "CLAUDECODE", "OPENCODE", "AGY_SESSION_ID", "ANTIGRAVITY_SESSION_ID"} {
+	for _, key := range []string{"CODEX_SESSION_ID", "CODEX_THREAD_ID", "CLAUDECODE", "OPENCODE", "ANTIGRAVITY_AGENT", "ANTIGRAVITY_CONVERSATION_ID", "AGY_SESSION_ID", "ANTIGRAVITY_SESSION_ID"} {
 		t.Setenv(key, "")
 	}
 
@@ -182,6 +182,13 @@ func TestResolveLeader(t *testing.T) {
 
 	t.Setenv("CODEX_SESSION_ID", "")
 	t.Setenv("CLAUDECODE", "")
+	t.Setenv("ANTIGRAVITY_AGENT", "1")
+	leader, err = resolveLeader("auto")
+	if err != nil || leader.Name() != "agy" {
+		t.Fatalf("runtime Antigravity detection = %v, %v", leader, err)
+	}
+
+	t.Setenv("ANTIGRAVITY_AGENT", "")
 	if _, err := resolveLeader("auto"); err == nil {
 		t.Fatal("resolveLeader(auto) succeeded without a detectable leader")
 	}

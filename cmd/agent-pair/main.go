@@ -320,7 +320,7 @@ func resolveLeader(name string) (agent.AgentAdapter, error) {
 		{agent: "codex", envs: []string{"CODEX_SESSION_ID", "CODEX_THREAD_ID"}},
 		{agent: "claude", envs: []string{"CLAUDECODE"}},
 		{agent: "opencode", envs: []string{"OPENCODE"}},
-		{agent: "agy", envs: []string{"AGY_SESSION_ID", "ANTIGRAVITY_SESSION_ID"}},
+		{agent: "agy", envs: []string{"ANTIGRAVITY_AGENT", "ANTIGRAVITY_CONVERSATION_ID", "AGY_SESSION_ID", "ANTIGRAVITY_SESSION_ID"}},
 	}
 
 	detected := ""
