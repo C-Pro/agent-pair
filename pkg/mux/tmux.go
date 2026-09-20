@@ -112,7 +112,7 @@ func (t *TmuxMux) SendText(handle *PaneHandle, text string) error {
 	}
 
 	// Send enter key to submit
-	enterCmd := exec.Command("tmux", "send-keys", "-t", handle.PaneID, "C-m")
+	enterCmd := exec.Command("tmux", "send-keys", "-t", handle.PaneID, "Enter")
 	if out, err := enterCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to send Enter key: %w (output: %s)", err, string(out))
 	}
