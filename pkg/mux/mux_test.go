@@ -97,7 +97,7 @@ func TestDetectActive(t *testing.T) {
 		"herdr":  &mockMultiplexer{name: "herdr", available: false},
 	}
 	_, err := DetectActive()
-	if err == nil || !strings.Contains(err.Error(), "no supported terminal multiplexer") {
+	if err == nil || !strings.Contains(err.Error(), "not running inside") {
 		t.Errorf("expected no supported terminal multiplexer error, got %v", err)
 	}
 
@@ -129,18 +129,14 @@ func TestDetectActive(t *testing.T) {
 		t.Errorf("expected tmux to win active priority, got %s", m.Name())
 	}
 
-	// Case 4: None active, fallback to first available: zellij
+	// Case 4: Installed but inactive multiplexers must not be selected.
 	registry = map[string]Multiplexer{
 		"tmux":   &mockMultiplexer{name: "tmux", available: false, active: false},
 		"zellij": &mockMultiplexer{name: "zellij", available: true, active: false},
 		"herdr":  &mockMultiplexer{name: "herdr", available: true, active: false},
 	}
-	m, err = DetectActive()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.Name() != "zellij" {
-		t.Errorf("expected fallback to zellij, got %s", m.Name())
+	if _, err = DetectActive(); err == nil || !strings.Contains(err.Error(), "not running inside") {
+		t.Errorf("expected inactive multiplexer error, got %v", err)
 	}
 }
 

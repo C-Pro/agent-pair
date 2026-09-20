@@ -59,14 +59,7 @@ func DetectActive() (Multiplexer, error) {
 		}
 	}
 
-	// Second priority: check if any multiplexer server is running
-	for _, name := range []string{"tmux", "zellij", "herdr"} {
-		if m, ok := registry[name]; ok && m.Available() {
-			return m, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no supported terminal multiplexer (tmux, zellij, herdr) detected or active")
+	return nil, fmt.Errorf("not running inside a supported terminal multiplexer (tmux, zellij, herdr)")
 }
 
 // DetectOrGet resolves multiplexer by name or auto-detects if "auto" / empty.
