@@ -44,8 +44,7 @@ func (c *ClaudeAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[stri
 func (c *ClaudeAgent) IsReady(screenOutput string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
 	return strings.Contains(clean, "Claude Code") ||
-		strings.Contains(clean, "Welcome to Claude Code") ||
-		strings.Contains(clean, "> ")
+		strings.Contains(clean, "Welcome to Claude Code")
 }
 
 func (c *ClaudeAgent) IsTurnFinished(screenOutput string, callsign string) bool {

@@ -257,10 +257,10 @@ func TestAgyAgent(t *testing.T) {
 	}
 
 	// IsReady
-	if !aa.IsReady("Antigravity shell") || !aa.IsReady("agy cli") || !aa.IsReady("Type a message") {
+	if !aa.IsReady("Antigravity CLI") || !aa.IsReady("Type a message") {
 		t.Errorf("IsReady failed for agy")
 	}
-	if aa.IsReady("other") {
+	if aa.IsReady("agy --model gemini") || aa.IsReady("other") {
 		t.Errorf("IsReady should return false for other text")
 	}
 
@@ -294,7 +294,7 @@ func TestClaudeAgent(t *testing.T) {
 	}
 
 	// IsReady
-	if !ca.IsReady("Welcome to Claude Code") || !ca.IsReady("> prompt") || !ca.IsReady("Claude Code") {
+	if !ca.IsReady("Welcome to Claude Code") || !ca.IsReady("Claude Code") {
 		t.Errorf("IsReady failed for claude")
 	}
 	if ca.IsReady("other prompt") {
@@ -337,7 +337,7 @@ func TestCodexAgent(t *testing.T) {
 	}
 
 	// IsReady
-	if !cda.IsReady("Codex CLI") || !cda.IsReady("OpenAI") || !cda.IsReady("> prompt") {
+	if !cda.IsReady("Codex CLI") || !cda.IsReady("OpenAI") {
 		t.Errorf("IsReady failed for codex")
 	}
 	if cda.IsReady("other") {

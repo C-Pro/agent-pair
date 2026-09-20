@@ -44,8 +44,7 @@ func (c *CodexAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[strin
 func (c *CodexAgent) IsReady(screenOutput string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
 	return strings.Contains(clean, "Codex") ||
-		strings.Contains(clean, "OpenAI") ||
-		strings.Contains(clean, "> ")
+		strings.Contains(clean, "OpenAI")
 }
 
 func (c *CodexAgent) IsTurnFinished(screenOutput string, callsign string) bool {

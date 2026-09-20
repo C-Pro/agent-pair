@@ -51,7 +51,6 @@ func (a *AgyAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[string]
 func (a *AgyAgent) IsReady(screenOutput string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
 	return strings.Contains(clean, "Antigravity") ||
-		strings.Contains(clean, "agy") ||
 		strings.Contains(clean, "Type a message")
 }
 
