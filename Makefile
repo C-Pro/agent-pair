@@ -1,7 +1,9 @@
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
-SKILLSDIR ?= $(HOME)/.agents/skills
-GEMINIDIR ?= $(HOME)/.gemini/config/skills
+OPENCODESKILLSDIR ?= $(HOME)/.config/opencode/skills
+CLAUDESKILLSDIR ?= $(HOME)/.claude/skills
+CODEXSKILLSDIR ?= $(or $(CODEX_HOME),$(HOME)/.codex)/skills
+AGYIDESKILLSDIR ?= $(HOME)/.gemini/config/skills
 
 .PHONY: all build test clean install
 
@@ -17,16 +19,13 @@ test:
 install: build
 	mkdir -p $(BINDIR)
 	install -m 755 bin/agent-pair $(BINDIR)/agent-pair
-	mkdir -p $(SKILLSDIR)
-	rm -rf $(SKILLSDIR)/pair-agentic-programming
-	cp -R $(CURDIR)/skills/pair-agentic-programming $(SKILLSDIR)/pair-agentic-programming
-	@if [ -d "$(HOME)/.gemini/config" ]; then \
-		mkdir -p $(GEMINIDIR); \
-		rm -rf $(GEMINIDIR)/pair-agentic-programming; \
-		cp -R $(CURDIR)/skills/pair-agentic-programming $(GEMINIDIR)/pair-agentic-programming; \
-	fi
+	@for skill_dir in $(OPENCODESKILLSDIR) $(CLAUDESKILLSDIR) $(CODEXSKILLSDIR) $(AGYIDESKILLSDIR); do \
+		mkdir -p "$$skill_dir"; \
+		rm -rf "$$skill_dir/pair-agentic-programming"; \
+		cp -R $(CURDIR)/skills/pair-agentic-programming "$$skill_dir/pair-agentic-programming"; \
+		done
 	@echo "==> Installed agent-pair to $(BINDIR)/agent-pair"
-	@echo "==> Copied skill to $(SKILLSDIR)/pair-agentic-programming"
+	@echo "==> Installed pair-agentic-programming for agy, OpenCode, Claude Code, and Codex"
 
 clean:
 	rm -rf bin

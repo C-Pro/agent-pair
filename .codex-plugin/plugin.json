@@ -1,0 +1,38 @@
+{
+  "name": "agent-pair",
+  "version": "0.1.0",
+  "description": "Multi-agent pair programming through terminal multiplexer panes.",
+  "author": {
+    "name": "cpro",
+    "url": "https://github.com/C-Pro"
+  },
+  "homepage": "https://github.com/C-Pro/agent-pair",
+  "repository": "https://github.com/C-Pro/agent-pair",
+  "license": "MIT",
+  "keywords": [
+    "pair-programming",
+    "multi-agent",
+    "tmux",
+    "zellij",
+    "herdr",
+    "agy",
+    "opencode",
+    "claude",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Pair",
+    "shortDescription": "Pair with a read-only coding agent.",
+    "longDescription": "Launch a read-only peer in a multiplexer pane for real-time pair programming.",
+    "developerName": "cpro",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/C-Pro/agent-pair",
+    "defaultPrompt": [
+      "Start a read-only peer review for this task."
+    ]
+  }
+}

@@ -5,7 +5,7 @@
 
 **Agent-Pair** is an extensible tool and agent skill that enables real-time, inter-process pair programming between autonomous AI coding agents.
 
-It uses terminal multiplexer panes (**tmux**, **zellij**, or **herdr**) as visual IPC channels to pair a **Lead Agent** (e.g. Antigravity / `gemini`) with a **Follower Agent** (e.g. OpenCode / `muse`, Claude Code, or Codex).
+It uses terminal multiplexer panes (**tmux**, **zellij**, or **herdr**) as visual IPC channels to pair any supported **Lead Agent** (Antigravity / `agy`, OpenCode, Claude Code, or Codex) with a read-only follower.
 
 ![Agent-Pair Demo](assets/demo.gif)
 
@@ -60,11 +60,13 @@ Or from a cloned repository:
 make install
 ```
 
-### Method 3: Antigravity Plugin Marketplace
-Because this repository contains a validated `plugin.json`, it can be directly installed into Antigravity:
+### Method 3: Antigravity Plugin
+The repository root is an Antigravity plugin:
 ```bash
-agy plugin install cpro/agent-pair
+agy plugin install https://github.com/C-Pro/agent-pair
 ```
+
+The script and `make install` install the same skill for all four hosts. They use the native global skill locations for OpenCode, Claude Code, Codex, and Antigravity. Restart the host after installation if it does not reload skills automatically.
 
 ---
 
@@ -78,7 +80,7 @@ agent-pair models opencode
 ### 2. Launch a Pair Programming Session
 Split the terminal window and initialize OpenCode with Muse in read-only mode (callsign automatically becomes `muse-spark-1.3`):
 ```bash
-agent-pair start --follower opencode --model opencode/muse-spark-1.3-contributor-free
+agent-pair start --leader codex --follower opencode --model opencode/muse-spark-1.3-contributor-free
 ```
 
 ### 3. Conduct a Collaborative Turn
@@ -112,27 +114,20 @@ agent-pair stop
 
 ---
 
-## Agent & Marketplace Compatibility Rules
+## Skill Compatibility
 
-This repository is structured to conform to the distribution specifications of each major AI coding agent:
+`skills/pair-agentic-programming` is the canonical skill bundle. Its YAML frontmatter and instructions are provider-neutral; the running host is always the lead. Pass the matching value to `--leader` when starting a session:
 
-### 1. Google Antigravity (`agy`)
-- **Rule**: Manifest `plugin.json` at repository root.
-- **Manifest**: Specifies name, version, author, license, and keywords.
-- **Discovery**: Automatically discovers `skills/<skill_name>/SKILL.md`.
-- **Validation**: Verifiable with `agy plugin validate .`.
+| Lead host | `--leader` value | Installed skill location |
+| --- | --- | --- |
+| Antigravity | `agy` | `~/.gemini/config/skills/` |
+| OpenCode | `opencode` | `~/.config/opencode/skills/` |
+| Claude Code | `claude` | `~/.claude/skills/` |
+| Codex | `codex` | `${CODEX_HOME:-~/.codex}/skills/` |
 
-### 2. OpenCode (`opencode`)
-- **Rule**: Skills placed in `.agents/skills/` or referenced in `opencode.json` via `"skills": { "paths": [...] }`.
-- **Discovery**: OpenCode automatically ingests `~/.agents/skills/pair-agentic-programming`.
+The root [plugin.json](plugin.json) packages the skill for Antigravity. [.codex-plugin/plugin.json](.codex-plugin/plugin.json) packages the same skill for Codex plugin marketplaces.
 
-### 3. Anthropic Claude Code (`claude`)
-- **Rule**: Follows the Agent Skills Standard (`SKILL.md` with YAML frontmatter).
-- **Discovery**: Managed through `.claude/skills/` or synced via `mise skills sync --dir .agents/skills`.
-
-### 4. OpenAI Codex (`codex`)
-- **Rule**: Manifest `plugin.json` compatible with `codex plugin add`.
-- **Discovery**: Loaded from configured marketplaces or cloned into `~/.codex/plugins/`.
+If `--leader auto` is used, `agent-pair` honors `AGENT_PAIR_LEADER` and detects Codex when `CODEX_HOME` is set. Pass `--leader` explicitly when detection is unavailable.
 
 ---
 

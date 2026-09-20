@@ -4,8 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="${PREFIX:-$HOME/.local}"
 BINDIR="$PREFIX/bin"
-SKILLSDIR="${HOME}/.agents/skills"
-GEMINIDIR="${HOME}/.gemini/config/skills"
+OPENCODESKILLSDIR="${HOME}/.config/opencode/skills"
+CLAUDESKILLSDIR="${HOME}/.claude/skills"
+CODEXSKILLSDIR="${CODEX_HOME:-${HOME}/.codex}/skills"
+AGYIDESKILLSDIR="${HOME}/.gemini/config/skills"
 REPO="${AGENT_PAIR_REPO:-cpro/agent-pair}"
 VERSION="${AGENT_PAIR_VERSION:-latest}"
 
@@ -66,34 +68,30 @@ elif [ -n "$ARCH" ] && [ -d "${TMP_DIR}/agent-pair-${OS}-${ARCH}/skills/pair-age
     SKILL_SRC="${TMP_DIR}/agent-pair-${OS}-${ARCH}/skills/pair-agentic-programming"
 fi
 
-if [ -z "$SKILL_SRC" ] && command -v curl >/dev/null 2>&1; then
-    echo "==> Fetching skill definition..."
-    REMOTE_SKILL_DIR="${TMP_DIR}/remote-skill/pair-agentic-programming"
-    mkdir -p "$REMOTE_SKILL_DIR"
-    if curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/skills/pair-agentic-programming/SKILL.md" -o "${REMOTE_SKILL_DIR}/SKILL.md" 2>/dev/null; then
-        SKILL_SRC="$REMOTE_SKILL_DIR"
-    fi
-fi
-
 if [ -n "$SKILL_SRC" ] && [ -d "$SKILL_SRC" ]; then
-    echo "==> Installing skill to $SKILLSDIR..."
-    mkdir -p "$SKILLSDIR"
-    rm -rf "$SKILLSDIR/pair-agentic-programming"
-    cp -R "$SKILL_SRC" "$SKILLSDIR/pair-agentic-programming"
+    install_skill() {
+        skill_dir="$1"
+        target="${skill_dir}/pair-agentic-programming"
+        echo "==> Installing skill to $target..."
+        mkdir -p "$skill_dir"
+        rm -rf "$target"
+        cp -R "$SKILL_SRC" "$target"
+    }
 
-    if [ -d "$HOME/.gemini/config" ]; then
-        echo "==> Installing skill to $GEMINIDIR..."
-        mkdir -p "$GEMINIDIR"
-        rm -rf "$GEMINIDIR/pair-agentic-programming"
-        cp -R "$SKILL_SRC" "$GEMINIDIR/pair-agentic-programming"
-    fi
+    install_skill "$OPENCODESKILLSDIR"
+    install_skill "$CLAUDESKILLSDIR"
+    install_skill "$CODEXSKILLSDIR"
+    install_skill "$AGYIDESKILLSDIR"
 else
-    echo "Warning: Could not find skill files to install." >&2
+    echo "Warning: Could not find the complete skill bundle to install." >&2
 fi
 
 echo ""
 echo "Successfully installed agent-pair!"
 echo "  • CLI Binary: $BINDIR/agent-pair"
-echo "  • Agent Skill: $SKILLSDIR/pair-agentic-programming"
+echo "  • OpenCode: $OPENCODESKILLSDIR/pair-agentic-programming"
+echo "  • Claude Code: $CLAUDESKILLSDIR/pair-agentic-programming"
+echo "  • Codex: $CODEXSKILLSDIR/pair-agentic-programming"
+echo "  • Antigravity: $AGYIDESKILLSDIR/pair-agentic-programming"
 echo ""
 echo "Try running: agent-pair --help"
