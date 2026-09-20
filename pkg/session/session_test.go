@@ -170,3 +170,21 @@ func TestGetSessionFileFallbackHome(t *testing.T) {
 		t.Errorf("file %q does not have expected prefix %q", file, expectedPrefix)
 	}
 }
+
+func TestSessionIsScopedToLeaderPane(t *testing.T) {
+	setupTestCacheDir(t)
+	t.Setenv("TMUX_PANE", "%1")
+	if err := Save(&Session{ID: "pane-one"}); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	t.Setenv("TMUX_PANE", "%2")
+	if Exists() {
+		t.Fatal("session from another leader pane leaked into this scope")
+	}
+
+	t.Setenv("TMUX_PANE", "%1")
+	if !Exists() {
+		t.Fatal("session was not found in its original leader pane")
+	}
+}

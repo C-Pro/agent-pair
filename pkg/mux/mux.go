@@ -26,6 +26,7 @@ type Multiplexer interface {
 	Available() bool
 	DetectActive() bool
 	CreatePane(opts PaneOptions) (*PaneHandle, error)
+	PaneAlive(handle *PaneHandle) (bool, error)
 	SendText(handle *PaneHandle, text string) error
 	CaptureOutput(handle *PaneHandle) (string, error)
 	ClosePane(handle *PaneHandle) error

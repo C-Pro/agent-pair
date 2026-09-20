@@ -1,7 +1,9 @@
 package session
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +11,8 @@ import (
 
 	"github.com/cpro/agent-pair/pkg/mux"
 )
+
+var ErrNoActiveSession = errors.New("no active pair session found (run 'agent-pair start' first)")
 
 // Session stores active pair programming session metadata.
 type Session struct {
@@ -35,7 +39,21 @@ func getSessionFile() (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "session.json"), nil
+	scope := sessionScope()
+	digest := sha256.Sum256([]byte(scope))
+	return filepath.Join(dir, fmt.Sprintf("session-%x.json", digest[:8])), nil
+}
+
+func sessionScope() string {
+	for _, key := range []string{"TMUX_PANE", "ZELLIJ_PANE_ID", "HERDR_PANE_ID"} {
+		if value := os.Getenv(key); value != "" {
+			return key + ":" + value
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		return "cwd:" + filepath.Clean(cwd)
+	}
+	return "user-default"
 }
 
 // Save writes the session to disk.
@@ -63,7 +81,7 @@ func Load() (*Session, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("no active pair session found (run 'agent-pair start' first)")
+			return nil, ErrNoActiveSession
 		}
 		return nil, err
 	}

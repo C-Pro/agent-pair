@@ -104,6 +104,21 @@ func (z *ZellijMux) SendText(handle *PaneHandle, text string) error {
 	return nil
 }
 
+func (z *ZellijMux) PaneAlive(handle *PaneHandle) (bool, error) {
+	if !z.Available() {
+		return false, fmt.Errorf("zellij is not installed")
+	}
+	if handle == nil || handle.PaneID == "" {
+		return false, nil
+	}
+
+	cmd := exec.Command("zellij", "action", "dump-screen", "-f", "-p", handle.PaneID)
+	if err := cmd.Run(); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 func (z *ZellijMux) CaptureOutput(handle *PaneHandle) (string, error) {
 	if !z.Available() {
 		return "", fmt.Errorf("zellij is not installed")

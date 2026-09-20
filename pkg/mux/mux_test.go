@@ -29,6 +29,10 @@ func (m *mockMultiplexer) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 	return &PaneHandle{MuxName: m.name, PaneID: "mock-pane"}, nil
 }
 
+func (m *mockMultiplexer) PaneAlive(handle *PaneHandle) (bool, error) {
+	return handle != nil && handle.PaneID != "", nil
+}
+
 func (m *mockMultiplexer) SendText(handle *PaneHandle, text string) error {
 	return nil
 }

@@ -34,6 +34,9 @@ case "$cmd" in
   split-window)
     echo "%42"
     ;;
+  display-message)
+    echo "%42"
+    ;;
   capture-pane)
     echo "OpenCode Ask anything"
     count=0

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -107,7 +108,11 @@ func runStart(args []string) error {
 		return err
 	}
 
-	if session.Exists() && !*force {
+	existing, err := loadActiveSession()
+	if err != nil && !errors.Is(err, session.ErrNoActiveSession) {
+		return err
+	}
+	if existing != nil && !*force {
 		return fmt.Errorf("an active session already exists (use 'agent-pair status', 'agent-pair stop', or --force)")
 	}
 
@@ -290,13 +295,35 @@ func readMessageFromArgsOrStdin(args []string) (string, error) {
 	return "", fmt.Errorf("no message provided (pass as argument or via stdin)")
 }
 
+func loadActiveSession() (*session.Session, error) {
+	sess, err := session.Load()
+	if err != nil {
+		return nil, err
+	}
+	m, err := mux.Get(sess.MuxName)
+	if err != nil {
+		return nil, err
+	}
+	alive, err := m.PaneAlive(sess.PaneHandle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check follower pane: %w", err)
+	}
+	if !alive {
+		if err := session.Clear(); err != nil {
+			return nil, fmt.Errorf("failed to clear stale session: %w", err)
+		}
+		return nil, session.ErrNoActiveSession
+	}
+	return sess, nil
+}
+
 func runSend(args []string) error {
 	msg, err := readMessageFromArgsOrStdin(args)
 	if err != nil {
 		return err
 	}
 
-	sess, err := session.Load()
+	sess, err := loadActiveSession()
 	if err != nil {
 		return err
 	}
@@ -333,7 +360,7 @@ func runWait(args []string) error {
 		return err
 	}
 
-	sess, err := session.Load()
+	sess, err := loadActiveSession()
 	if err != nil {
 		return err
 	}
@@ -397,7 +424,7 @@ func runTurn(args []string) error {
 }
 
 func runStop(args []string) error {
-	sess, err := session.Load()
+	sess, err := loadActiveSession()
 	if err != nil {
 		return err
 	}
@@ -424,7 +451,7 @@ func runStop(args []string) error {
 }
 
 func runStatus(args []string) error {
-	sess, err := session.Load()
+	sess, err := loadActiveSession()
 	if err != nil {
 		return err
 	}

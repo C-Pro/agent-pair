@@ -120,6 +120,22 @@ func (t *TmuxMux) SendText(handle *PaneHandle, text string) error {
 	return nil
 }
 
+func (t *TmuxMux) PaneAlive(handle *PaneHandle) (bool, error) {
+	if !t.Available() {
+		return false, fmt.Errorf("tmux is not installed")
+	}
+	if handle == nil || handle.PaneID == "" {
+		return false, nil
+	}
+
+	cmd := exec.Command("tmux", "display-message", "-p", "-t", handle.PaneID, "#{pane_id}")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, nil
+	}
+	return strings.TrimSpace(string(out)) == handle.PaneID, nil
+}
+
 func (t *TmuxMux) CaptureOutput(handle *PaneHandle) (string, error) {
 	if !t.Available() {
 		return "", fmt.Errorf("tmux is not installed")

@@ -89,6 +89,21 @@ func (h *HerdrMux) SendText(handle *PaneHandle, text string) error {
 	return nil
 }
 
+func (h *HerdrMux) PaneAlive(handle *PaneHandle) (bool, error) {
+	if !h.Available() {
+		return false, fmt.Errorf("herdr is not installed")
+	}
+	if handle == nil || handle.PaneID == "" {
+		return false, nil
+	}
+
+	cmd := exec.Command("herdr", "pane", "read", handle.PaneID, "--format", "text", "--source", "recent")
+	if err := cmd.Run(); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 func (h *HerdrMux) CaptureOutput(handle *PaneHandle) (string, error) {
 	if !h.Available() {
 		return "", fmt.Errorf("herdr is not installed")
