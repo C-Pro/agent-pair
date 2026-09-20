@@ -112,7 +112,7 @@ func (z *ZellijMux) PaneAlive(handle *PaneHandle) (bool, error) {
 		return false, nil
 	}
 
-	cmd := exec.Command("zellij", "action", "dump-screen", "-f", "-p", handle.PaneID)
+	cmd := exec.Command("zellij", "action", "dump-screen", "-p", handle.PaneID)
 	if err := cmd.Run(); err != nil {
 		return false, nil
 	}
