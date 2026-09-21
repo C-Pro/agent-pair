@@ -102,6 +102,30 @@ exit 0
 		t.Fatalf("failed to write mock codex: %v", err)
 	}
 
+	// The claude adapter reads model aliases and hardening-flag support out of
+	// the CLI's own --help, so the mock answers --help the way the real one does.
+	claudeScript := `#!/bin/sh
+if [ "$1" = "--help" ]; then
+  cat <<'HELP'
+Usage: claude [options] [command] [prompt]
+
+Options:
+  --model <model>                       Model for the current session. Provide
+                                        an alias for the latest model (e.g.
+                                        'fable', 'opus', or 'sonnet') or a
+                                        model's full name (e.g.
+                                        'claude-fable-5').
+  --restricted                          Restricted mode.
+  --strict-mcp-config                   Only use MCP servers from --mcp-config.
+HELP
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte(claudeScript), 0755); err != nil {
+		t.Fatalf("failed to write mock claude: %v", err)
+	}
+
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TMUX", "/tmp/tmux-mock/default,1,0")
 	t.Setenv("AGENT_PAIR_MOCK_SEND_FAIL", "0")
@@ -243,23 +267,19 @@ func TestPrintUsage(t *testing.T) {
 func TestRunModels(t *testing.T) {
 	setupTestEnv(t)
 
-	// Default agent (opencode)
+	// Default agent (claude)
 	if err := runModels(nil); err != nil {
 		t.Fatalf("runModels(nil) failed: %v", err)
 	}
 
-	// Explicit claude
-	t.Run("claude", func(t *testing.T) {
-		if os.Getenv("CI") == "true" {
-			t.Skip("skipping in CI: agent binary for claude is missing")
-		}
-		if _, err := exec.LookPath("claude"); err != nil {
-			t.Skip("claude binary not available on PATH")
-		}
-		if err := runModels([]string{"claude"}); err != nil {
-			t.Fatalf("runModels(claude) failed: %v", err)
-		}
-	})
+	// Explicit agents
+	for _, name := range []string{"claude", "opencode"} {
+		t.Run(name, func(t *testing.T) {
+			if err := runModels([]string{name}); err != nil {
+				t.Fatalf("runModels(%s) failed: %v", name, err)
+			}
+		})
+	}
 
 	// Unknown agent
 	if err := runModels([]string{"unknown-agent"}); err == nil {
