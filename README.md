@@ -75,7 +75,7 @@ The `install.sh` script downloads the matching precompiled binary from GitHub Re
 
 Pin the commit you are installing rather than tracking `main`, so the script you audited is the script you run:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/C-Pro/agent-pair/PINNED_COMMIT/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/C-Pro/agent-pair/97060656e28613296805158c8f556bf547173472/install.sh | bash
 ```
 The checksum proves the download arrived intact and matches what that release published; it does not prove who produced the release. Piping to a shell runs code before you have read it, so cloning first and running the script from the checkout you reviewed is the better habit:
 ```bash
