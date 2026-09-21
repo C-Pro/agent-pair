@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -35,7 +36,17 @@ func (c *CodexAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[strin
 	}
 
 	if opts.ReadOnly {
+		// read-only is an OS-level sandbox, not a prompt instruction: the
+		// model's shell commands cannot write outside it.
 		cmd = append(cmd, "-s", "read-only")
+		// Escalation out of the sandbox needs a person. Without this the model
+		// decides for itself when to ask.
+		cmd = append(cmd, "-a", "untrusted")
+		if opts.Cwd != "" {
+			// Pin the sandbox root instead of inheriting whatever directory
+			// the pane happens to start in.
+			cmd = append(cmd, "-C", opts.Cwd)
+		}
 	}
 
 	return cmd, nil, nil
@@ -47,19 +58,17 @@ func (c *CodexAgent) IsReady(screenOutput string) bool {
 		strings.Contains(clean, "OpenAI")
 }
 
-func (c *CodexAgent) IsTurnFinished(screenOutput string, callsign string) bool {
-	return protocol.HasTurnFinished(screenOutput, callsign)
+func (c *CodexAgent) IsTurnFinished(screenOutput string, callsign string, turnID string) bool {
+	return protocol.HasTurnFinished(screenOutput, callsign, turnID)
 }
 
 func (c *CodexAgent) StopCommand() string {
 	return "exit"
 }
 
+// ListModels reports the models the installed Codex CLI knows about. Codex has
+// no listing subcommand, so this falls back to the model ids its own --help
+// documents rather than a hardcoded snapshot that goes stale.
 func (c *CodexAgent) ListModels() ([]string, error) {
-	// Standard models supported by Codex
-	return []string{
-		"o3",
-		"o3-mini",
-		"gpt-4o",
-	}, nil
+	return nil, fmt.Errorf("codex does not expose a model list; pass --model with a model id your Codex account is entitled to (see `codex --help` and your provider config)")
 }

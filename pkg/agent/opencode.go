@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -43,15 +44,21 @@ func (o *OpenCodeAgent) DefaultCallsign(model string) string {
 func (o *OpenCodeAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[string]string, error) {
 	cmd := []string{"opencode"}
 
-	model := opts.Model
-	if model == "" {
-		model = "opencode/muse-spark-1.3-contributor-free"
+	// No default model: the follower reads the whole workspace, so which model
+	// and which provider sees it has to be a deliberate choice.
+	if opts.Model == "" {
+		return nil, nil, fmt.Errorf("opencode follower needs an explicit --model (run `agent-pair models opencode`); pick one your organization has approved to receive this repository's contents")
 	}
-	cmd = append(cmd, "-m", model)
+	cmd = append(cmd, "-m", opts.Model)
 
 	if opts.ReadOnly {
 		// Plan mode denies edit and write tools natively
 		cmd = append(cmd, "--agent", "plan")
+		// Load no third-party plugins: they add tools this session has not
+		// vetted and paths for data to leave the machine.
+		if supportsFlag("opencode", "--pure") {
+			cmd = append(cmd, "--pure")
+		}
 	}
 
 	return cmd, nil, nil
@@ -65,7 +72,7 @@ func (o *OpenCodeAgent) IsReady(screenOutput string) bool {
 		strings.Contains(clean, "Build ·")
 }
 
-func (o *OpenCodeAgent) IsTurnFinished(screenOutput string, callsign string) bool {
+func (o *OpenCodeAgent) IsTurnFinished(screenOutput string, callsign string, turnID string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
 
 	// Must not be currently generating/thinking
@@ -79,7 +86,7 @@ func (o *OpenCodeAgent) IsTurnFinished(screenOutput string, callsign string) boo
 	}
 
 	// Or if turn closing marker is present
-	if protocol.HasTurnFinished(screenOutput, callsign) {
+	if protocol.HasTurnFinished(screenOutput, callsign, turnID) {
 		return true
 	}
 

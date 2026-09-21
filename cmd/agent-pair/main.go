@@ -73,11 +73,16 @@ MULTIPLEXERS SUPPORTED:
   tmux, zellij, herdr (auto-detected from environment)
 
 AGENTS SUPPORTED:
-  opencode, agy, claude, codex
+  claude, codex, agy, opencode
+
+NOTE:
+  The follower reads this repository and everything you send it, under its own
+  provider account. Choose a follower model your organization has approved to
+  receive this code.
 
 EXAMPLES:
-  # Start a session with OpenCode using its Muse model in tmux/zellij/herdr
-  agent-pair start --leader codex --follower opencode --model opencode/muse-spark-1.3-contributor-free
+  # Pair Claude Code with a read-only Claude follower on Opus 5
+  agent-pair start --leader claude --follower claude --model claude-opus-5
 
   # Send a turn and wait for reply
   agent-pair turn "What are the tradeoffs of using Go channels vs mutexes here?"
@@ -90,7 +95,7 @@ func runStart(args []string) error {
 	fs := flag.NewFlagSet("start", flag.ExitOnError)
 
 	muxName := fs.String("mux", "auto", "Multiplexer to use (auto, tmux, zellij, herdr)")
-	followerName := fs.String("follower", "opencode", "Follower agent (opencode, agy, claude, codex)")
+	followerName := fs.String("follower", "claude", "Follower agent (claude, codex, agy, opencode)")
 	leaderName := fs.String("leader", "auto", "Leader agent (auto, agy, opencode, claude, codex)")
 	model := fs.String("model", "", "Model identifier for follower")
 	effort := fs.String("effort", "", "Follower reasoning effort (low, medium, high)")
@@ -145,11 +150,9 @@ func runStart(args []string) error {
 		return err
 	}
 
-	// Resolve model
+	// Resolve model. There is deliberately no default: the follower reads this
+	// repository, so which provider and tier receives it is the operator's call.
 	targetModel := *model
-	if targetModel == "" && followerAdapter.Name() == "opencode" {
-		targetModel = "opencode/muse-spark-1.3-contributor-free"
-	}
 	targetEffort := *effort
 	if targetEffort == "" {
 		targetEffort = os.Getenv("AGENT_PAIR_EFFORT")
@@ -263,18 +266,22 @@ func runStart(args []string) error {
 	// Initial bootstrap handshake
 	if !*noBootstrap {
 		fmt.Printf("==> Transmitting protocol handshake to %s...\n", fCallsign)
-		baseline := 0
-		if output, captureErr := m.CaptureOutput(handle); captureErr == nil {
-			baseline = protocol.CountTurnEndMarkers(output, fCallsign)
+		turnID := protocol.NewTurnID()
+		sess.TurnID = turnID
+		if err := session.Save(sess); err != nil {
+			return fmt.Errorf("failed to save bootstrap turn id: %w", err)
 		}
-		bootstrap := protocol.FormatBootstrapPrompt(lCallsign, fCallsign, targetCwd, *readOnly)
+		// The handshake travels in the same envelope as every other turn, so
+		// its acknowledgement is matched the same way.
+		bootstrap := protocol.FormatTurn(lCallsign, fCallsign,
+			protocol.FormatBootstrapPrompt(lCallsign, fCallsign, targetCwd, turnID, *readOnly), turnID)
 		if err := m.SendText(handle, bootstrap); err != nil {
 			return fmt.Errorf("failed to send bootstrap prompt: %w", err)
 		}
 
 		fmt.Printf("==> Awaiting protocol acknowledgment...\n")
 		ackDone := false
-		ackBaseline := baseline
+		ackBaseline := 0
 		ackStart := time.Now()
 		for time.Since(ackStart) < timeout {
 			time.Sleep(1 * time.Second)
@@ -282,11 +289,10 @@ func runStart(args []string) error {
 			if err != nil {
 				continue
 			}
-			markerCount := protocol.CountTurnEndMarkers(output, fCallsign)
-			if markerCount > baseline && followerAdapter.IsTurnFinished(output, fCallsign) {
+			if protocol.IsTurnComplete(output, fCallsign, lCallsign, turnID) && followerAdapter.IsTurnFinished(output, fCallsign, "") {
 				ackDone = true
-				ackBaseline = markerCount
-				if body, found := protocol.ExtractLatestTurn(output, fCallsign, lCallsign); found {
+				ackBaseline = protocol.CountTurnEndMarkers(output, fCallsign, "")
+				if body, found := protocol.ExtractLatestTurn(output, fCallsign, lCallsign, turnID); found {
 					fmt.Printf("\n[ %s ACK RECEIVED ]\n%s\n\n", fCallsign, body)
 				}
 				break
@@ -422,12 +428,17 @@ func runSend(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to capture follower output before sending turn: %w", err)
 	}
-	sess.ResponseBaseline = protocol.CountTurnEndMarkers(output, sess.FollowerCallsign)
+	// Each turn carries its own id, so a marker in scrollback -- or one inside
+	// an earlier reply quoted back into this prompt -- cannot be read as this
+	// turn completing. The watermark stays as a fallback for followers that
+	// drop the id.
+	sess.TurnID = protocol.NewTurnID()
+	sess.ResponseBaseline = protocol.CountTurnEndMarkers(output, sess.FollowerCallsign, "")
 	if err := session.Save(sess); err != nil {
 		return fmt.Errorf("failed to save response watermark: %w", err)
 	}
 
-	formatted := protocol.FormatTurn(sess.LeaderCallsign, sess.FollowerCallsign, msg)
+	formatted := protocol.FormatTurn(sess.LeaderCallsign, sess.FollowerCallsign, msg, sess.TurnID)
 	if err := m.SendText(sess.PaneHandle, formatted); err != nil {
 		return fmt.Errorf("failed to send turn message: %w", err)
 	}
@@ -471,15 +482,24 @@ func runWait(args []string) error {
 			continue
 		}
 
-		if protocol.CountTurnEndMarkers(output, sess.FollowerCallsign) > sess.ResponseBaseline && followerAdapter.IsTurnFinished(output, sess.FollowerCallsign) {
+		// With a turn id the reply is matched by id, or by an untagged marker
+		// that appears after this turn's prompt echo. Without one -- `wait`
+		// called with no preceding `send` -- fall back to the scrollback
+		// watermark taken when the session was last written.
+		complete := protocol.CountTurnEndMarkers(output, sess.FollowerCallsign, "") > sess.ResponseBaseline
+		if sess.TurnID != "" {
+			complete = protocol.IsTurnComplete(output, sess.FollowerCallsign, sess.LeaderCallsign, sess.TurnID)
+		}
+
+		if complete && followerAdapter.IsTurnFinished(output, sess.FollowerCallsign, "") {
 			if *raw {
 				fmt.Println(output)
 				return nil
 			}
 
-			if body, found := protocol.ExtractLatestTurn(output, sess.FollowerCallsign, sess.LeaderCallsign); found {
-				fmt.Printf("[ CQ %s -> %s ]\n\n%s\n\n[ %s over ]\n",
-					sess.FollowerCallsign, sess.LeaderCallsign, body, sess.FollowerCallsign)
+			if body, found := protocol.ExtractLatestTurn(output, sess.FollowerCallsign, sess.LeaderCallsign, sess.TurnID); found {
+				fmt.Printf("[ CQ %s -> %s #%s ]\n\n%s\n\n[ %s over #%s ]\n",
+					sess.FollowerCallsign, sess.LeaderCallsign, sess.TurnID, body, sess.FollowerCallsign, sess.TurnID)
 				return nil
 			}
 
@@ -574,7 +594,7 @@ func runStatus(args []string) error {
 }
 
 func runModels(args []string) error {
-	agentName := "opencode"
+	agentName := "claude"
 	if len(args) > 0 {
 		agentName = args[0]
 	}

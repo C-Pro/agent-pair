@@ -8,7 +8,7 @@ OPENCODESKILLSDIR="${HOME}/.config/opencode/skills"
 CLAUDESKILLSDIR="${HOME}/.claude/skills"
 CODEXSKILLSDIR="${CODEX_HOME:-${HOME}/.codex}/skills"
 AGYIDESKILLSDIR="${HOME}/.gemini/config/skills"
-REPO="${AGENT_PAIR_REPO:-cpro/agent-pair}"
+REPO="${AGENT_PAIR_REPO:-C-Pro/agent-pair}"
 VERSION="${AGENT_PAIR_VERSION:-latest}"
 
 mkdir -p "$BINDIR"
@@ -34,8 +34,45 @@ if [ -n "$ARCH" ] && command -v curl >/dev/null 2>&1; then
         DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET_NAME}"
     fi
 
+    if [ "$VERSION" = "latest" ]; then
+        CHECKSUM_URL="https://github.com/${REPO}/releases/latest/download/checksums.txt"
+    else
+        CHECKSUM_URL="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
+    fi
+
     echo "==> Attempting to download prebuilt binary: ${ASSET_NAME}..."
     if curl -fsSL "$DOWNLOAD_URL" -o "${TMP_DIR}/${ASSET_NAME}" 2>/dev/null; then
+        # Verify the artifact against the checksums published with the release.
+        # A download that cannot be verified is not installed.
+        if ! curl -fsSL "$CHECKSUM_URL" -o "${TMP_DIR}/checksums.txt" 2>/dev/null; then
+            echo "Error: release ${VERSION} publishes no checksums.txt; refusing to install an unverified binary." >&2
+            echo "       Clone the repository and run ./install.sh to build from source instead." >&2
+            exit 1
+        fi
+
+        if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL="$(sha256sum "${TMP_DIR}/${ASSET_NAME}" | awk '{print $1}')"
+        elif command -v shasum >/dev/null 2>&1; then
+            ACTUAL="$(shasum -a 256 "${TMP_DIR}/${ASSET_NAME}" | awk '{print $1}')"
+        else
+            echo "Error: neither sha256sum nor shasum is available; cannot verify the download." >&2
+            exit 1
+        fi
+
+        EXPECTED="$(awk -v name="$ASSET_NAME" '$2 == name || $2 == "*" name {print $1}' "${TMP_DIR}/checksums.txt" | head -n1)"
+        if [ -z "$EXPECTED" ]; then
+            echo "Error: ${ASSET_NAME} is not listed in checksums.txt; refusing to install." >&2
+            exit 1
+        fi
+        if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "Error: checksum mismatch for ${ASSET_NAME}." >&2
+            echo "       expected: ${EXPECTED}" >&2
+            echo "       actual:   ${ACTUAL}" >&2
+            echo "       The download was tampered with or truncated. Not installing." >&2
+            exit 1
+        fi
+        echo "==> Checksum verified (${ACTUAL})."
+
         echo "==> Extracting release artifact..."
         tar -xzf "${TMP_DIR}/${ASSET_NAME}" -C "$TMP_DIR"
         install -m 755 "${TMP_DIR}/agent-pair-${OS}-${ARCH}/agent-pair" "$BINDIR/agent-pair"

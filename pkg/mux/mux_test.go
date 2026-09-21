@@ -581,3 +581,51 @@ func TestHerdrMuxOperations(t *testing.T) {
 		t.Fatalf("ClosePane failed: %v", err)
 	}
 }
+
+func TestZellijCreatePaneFailsClosedWithoutPaneID(t *testing.T) {
+	dir := setupMockBinDir(t)
+
+	// A zellij that prints nothing addressable, which is what `zellij run`
+	// actually does on several versions.
+	silent := `#!/bin/sh
+cmd="$1"
+shift
+case "$cmd" in
+  run) exit 0 ;;
+  action)
+    if [ "$1" = "dump-screen" ]; then exit 1; fi
+    exit 0
+    ;;
+  *) exit 0 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(dir, "zellij"), []byte(silent), 0755); err != nil {
+		t.Fatalf("failed to write mock zellij: %v", err)
+	}
+
+	zm := &ZellijMux{}
+	handle, err := zm.CreatePane(PaneOptions{Title: "[pair:claude]", Command: []string{"echo", "hi"}})
+	if err == nil {
+		// Regression: the pane *title* used to be accepted as a pane id, so
+		// later writes plus a Return went to an unverified target.
+		t.Fatalf("expected CreatePane to fail closed, got handle %+v", handle)
+	}
+	if handle != nil {
+		t.Fatalf("expected no handle on failure, got %+v", handle)
+	}
+	if !strings.Contains(err.Error(), "addressable pane id") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestZellijRefusesToWriteWithoutPaneID(t *testing.T) {
+	setupMockBinDir(t)
+	zm := &ZellijMux{}
+
+	if err := zm.SendText(&PaneHandle{MuxName: "zellij"}, "hello"); err == nil {
+		t.Fatal("expected SendText to refuse an unresolved pane id")
+	}
+	if _, err := zm.CaptureOutput(&PaneHandle{MuxName: "zellij"}); err == nil {
+		t.Fatal("expected CaptureOutput to refuse an unresolved pane id")
+	}
+}

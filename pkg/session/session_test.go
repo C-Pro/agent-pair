@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,10 +11,21 @@ import (
 	"github.com/cpro/agent-pair/pkg/mux"
 )
 
+// pinCacheDir points the session store at a temporary cache root. It replaces
+// os.UserCacheDir rather than setting XDG_CACHE_HOME, which only has an effect
+// on linux: on darwin os.UserCacheDir resolves to ~/Library/Caches and these
+// tests would assert against the wrong path.
+func pinCacheDir(t *testing.T, dir string, err error) {
+	t.Helper()
+	previous := userCacheDir
+	userCacheDir = func() (string, error) { return dir, err }
+	t.Cleanup(func() { userCacheDir = previous })
+}
+
 func setupTestCacheDir(t *testing.T) string {
 	t.Helper()
 	tempDir := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", tempDir)
+	pinCacheDir(t, tempDir, nil)
 	t.Setenv("HOME", tempDir)
 	return tempDir
 }
@@ -131,7 +143,7 @@ func TestGetSessionFileMkdirError(t *testing.T) {
 		t.Fatalf("failed to create blocker file: %v", err)
 	}
 
-	t.Setenv("XDG_CACHE_HOME", tempDir)
+	pinCacheDir(t, tempDir, nil)
 	t.Setenv("HOME", tempDir)
 
 	_, err := getSessionFile()
@@ -157,7 +169,8 @@ func TestGetSessionFileMkdirError(t *testing.T) {
 
 func TestGetSessionFileFallbackHome(t *testing.T) {
 	tempHome := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", "")
+	// With no resolvable user cache directory, the store falls back to $HOME/.cache.
+	pinCacheDir(t, "", errors.New("no cache dir"))
 	t.Setenv("HOME", tempHome)
 
 	file, err := getSessionFile()

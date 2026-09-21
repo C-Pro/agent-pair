@@ -29,7 +29,9 @@ func setupTestEnv(t *testing.T) string {
 	tmuxScript := `#!/bin/sh
 cmd="$1"
 shift
-state_file="$XDG_CACHE_HOME/tmux-response-count"
+state_dir="$XDG_CACHE_HOME"
+buf="$state_dir/tmux-buffer"
+transcript="$state_dir/tmux-transcript"
 case "$cmd" in
   split-window)
     echo "%42"
@@ -39,21 +41,28 @@ case "$cmd" in
     ;;
   capture-pane)
     echo "OpenCode Ask anything"
-    count=0
-    if [ -f "$state_file" ]; then count=$(cat "$state_file"); fi
-    i=0
-    while [ "$i" -lt "$count" ]; do
-      echo "[ CQ muse -> gemini ]\nresponse $i\n[ muse over ]"
-      i=$((i + 1))
-    done
+    if [ -f "$transcript" ]; then cat "$transcript"; fi
+    ;;
+  set-buffer)
+    if [ "$AGENT_PAIR_MOCK_SEND_FAIL" = "1" ]; then exit 1; fi
+    printf '%s\n' "$4" > "$buf"
+    ;;
+  load-buffer)
+    if [ "$AGENT_PAIR_MOCK_SEND_FAIL" = "1" ]; then exit 1; fi
+    cat > "$buf"
+    ;;
+  paste-buffer)
+    # A real pane echoes what was pasted into it.
+    if [ -f "$buf" ]; then cat "$buf" >> "$transcript"; fi
     ;;
   send-keys)
-    count=0
-    if [ -f "$state_file" ]; then count=$(cat "$state_file"); fi
-    echo $((count + 1)) > "$state_file"
-    ;;
-  set-buffer|load-buffer)
-    if [ "$AGENT_PAIR_MOCK_SEND_FAIL" = "1" ]; then exit 1; fi
+    # Enter submits: the follower answers, quoting the turn id it was given.
+    id=$(sed -n 's/.*\[ CQ [^ ]* -> [^ ]* #\([0-9a-zA-Z]*\) \].*/\1/p' "$buf" | head -n1)
+    if [ -n "$id" ]; then
+      printf '[ CQ muse -> gemini #%s ]\nresponse\n[ muse over #%s ]\n' "$id" "$id" >> "$transcript"
+    else
+      printf '[ CQ muse -> gemini ]\nresponse\n[ muse over ]\n' >> "$transcript"
+    fi
     ;;
   kill-pane)
     echo "$*" > "$XDG_CACHE_HOME/tmux-killed"
@@ -364,8 +373,12 @@ func TestRunWait(t *testing.T) {
 	if err := session.Save(sess); err != nil {
 		t.Fatalf("session.Save failed: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tempDir, "tmux-response-count"), []byte("1\n"), 0644); err != nil {
-		t.Fatalf("failed to seed mock response: %v", err)
+	// Seed a reply that predates this turn: `wait` without a preceding `send`
+	// falls back to the scrollback watermark, so an unanswered turn must not
+	// look complete.
+	if err := os.WriteFile(filepath.Join(tempDir, "tmux-transcript"),
+		[]byte("[ CQ muse -> gemini ]\nearlier reply\n[ muse over ]\n"), 0644); err != nil {
+		t.Fatalf("failed to seed mock transcript: %v", err)
 	}
 
 	// Wait with extraction
@@ -483,6 +496,7 @@ func TestRunStart(t *testing.T) {
 		err := runStart([]string{
 			"-mux", "tmux",
 			"-follower", "opencode",
+			"-model", "opencode/mock-model-1",
 			"-leader", "agy",
 			"-timeout", "5",
 			"-leader-callsign", "gemini",
@@ -510,7 +524,8 @@ func TestRunStart(t *testing.T) {
 		}
 
 		// Existing session WITH --force should succeed
-		err3 := runStart([]string{"-mux", "tmux", "-force", "-timeout", "5", "-no-bootstrap"})
+		err3 := runStart([]string{"-mux", "tmux", "-force", "-timeout", "5", "-no-bootstrap",
+			"-follower", "opencode", "-model", "opencode/mock-model-1"})
 		if err3 != nil {
 			t.Errorf("expected --force to succeed, got %v", err3)
 		}
@@ -527,7 +542,8 @@ func TestRunStart(t *testing.T) {
 		_ = os.Remove(killRecord)
 		t.Setenv("AGENT_PAIR_MOCK_SEND_FAIL", "1")
 
-		err := runStart([]string{"-mux", "tmux", "-leader", "agy", "-follower", "opencode", "-timeout", "2"})
+		err := runStart([]string{"-mux", "tmux", "-leader", "agy", "-follower", "opencode",
+			"-model", "opencode/mock-model-1", "-timeout", "2"})
 		if err == nil || !strings.Contains(err.Error(), "failed to send bootstrap prompt") {
 			t.Fatalf("expected bootstrap send failure, got %v", err)
 		}

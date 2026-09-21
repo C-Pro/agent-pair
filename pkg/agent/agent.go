@@ -2,7 +2,9 @@ package agent
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
+	"sync"
 )
 
 // LaunchOptions provides settings for constructing an agent CLI command.
@@ -21,12 +23,37 @@ type AgentAdapter interface {
 	DefaultCallsign(model string) string
 	BuildLaunchCommand(opts LaunchOptions) ([]string, map[string]string, error)
 	IsReady(screenOutput string) bool
-	IsTurnFinished(screenOutput string, callsign string) bool
+	IsTurnFinished(screenOutput string, callsign string, turnID string) bool
 	StopCommand() string
 	ListModels() ([]string, error)
 }
 
 var registry = make(map[string]AgentAdapter)
+
+// supportsFlag reports whether a CLI advertises a flag in its --help output.
+// Hardening flags are added only when the installed binary understands them, so
+// an older agent still launches instead of failing on an unknown flag.
+func supportsFlag(bin, flag string) bool {
+	helpCacheMu.Lock()
+	help, ok := helpCache[bin]
+	if !ok {
+		cmd := exec.Command(bin, "--help")
+		out, err := cmd.CombinedOutput()
+		if err != nil && len(out) == 0 {
+			help = ""
+		} else {
+			help = string(out)
+		}
+		helpCache[bin] = help
+	}
+	helpCacheMu.Unlock()
+	return strings.Contains(help, flag)
+}
+
+var (
+	helpCacheMu sync.Mutex
+	helpCache   = map[string]string{}
+)
 
 // Register registers an agent adapter.
 func Register(a AgentAdapter) {
