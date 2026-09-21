@@ -24,14 +24,20 @@ type Session struct {
 	FollowerAgent    string          `json:"follower_agent"`
 	FollowerCallsign string          `json:"follower_callsign"`
 	FollowerModel    string          `json:"follower_model"`
+	TurnID           string          `json:"turn_id,omitempty"`
 	Cwd              string          `json:"cwd"`
 	ReadOnly         bool            `json:"read_only"`
 	CreatedAt        time.Time       `json:"created_at"`
 	ResponseBaseline int             `json:"response_marker_baseline,omitempty"`
 }
 
+// userCacheDir is indirected so tests can pin the cache root. os.UserCacheDir
+// resolves differently per platform (~/Library/Caches on darwin, XDG_CACHE_HOME
+// on linux), which otherwise makes the path assertions OS-dependent.
+var userCacheDir = os.UserCacheDir
+
 func getSessionFile() (string, error) {
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := userCacheDir()
 	if err != nil {
 		cacheDir = filepath.Join(os.Getenv("HOME"), ".cache")
 	}

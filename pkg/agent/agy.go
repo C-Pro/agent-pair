@@ -53,6 +53,9 @@ func (a *AgyAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[string]
 	if opts.ReadOnly {
 		cmd = append(cmd, "--mode", "plan", "--sandbox")
 	}
+	if opts.Cwd != "" && supportsFlag("agy", "--cwd") {
+		cmd = append(cmd, "--cwd", opts.Cwd)
+	}
 
 	return cmd, nil, nil
 }
@@ -63,8 +66,8 @@ func (a *AgyAgent) IsReady(screenOutput string) bool {
 		strings.Contains(clean, "Type a message")
 }
 
-func (a *AgyAgent) IsTurnFinished(screenOutput string, callsign string) bool {
-	return protocol.HasTurnFinished(screenOutput, callsign)
+func (a *AgyAgent) IsTurnFinished(screenOutput string, callsign string, turnID string) bool {
+	return protocol.HasTurnFinished(screenOutput, callsign, turnID)
 }
 
 func (a *AgyAgent) StopCommand() string {

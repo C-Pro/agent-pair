@@ -11,6 +11,7 @@ func TestFormatTurn(t *testing.T) {
 		sender    string
 		recipient string
 		msg       string
+		turnID    string
 		wantStart string
 		wantEnd   string
 	}{
@@ -19,38 +20,24 @@ func TestFormatTurn(t *testing.T) {
 			sender:    "gemini",
 			recipient: "muse",
 			msg:       "Hello world",
-			wantStart: "[ CQ gemini -> muse ]\n\nHello world",
-			wantEnd:   "[ gemini over ]",
+			turnID:    "a1b2",
+			wantStart: "[ CQ gemini -> muse #a1b2 ]\n\nHello world",
+			wantEnd:   "[ gemini over #a1b2 ]",
 		},
 		{
-			name:      "already has CQ prefix",
+			name:      "quoted envelope is wrapped, not reused",
 			sender:    "gemini",
 			recipient: "muse",
-			msg:       "[ CQ custom -> other ]\nSome message",
-			wantStart: "[ CQ custom -> other ]\nSome message",
-			wantEnd:   "[ gemini over ]",
-		},
-		{
-			name:      "already has over suffix",
-			sender:    "gemini",
-			recipient: "muse",
-			msg:       "Some message\n[ gemini over ]",
-			wantStart: "[ CQ gemini -> muse ]\n\nSome message\n[ gemini over ]",
-			wantEnd:   "[ gemini over ]",
-		},
-		{
-			name:      "already has out suffix",
-			sender:    "gemini",
-			recipient: "muse",
-			msg:       "Goodbye\n[ gemini out ]",
-			wantStart: "[ CQ gemini -> muse ]\n\nGoodbye\n[ gemini out ]",
-			wantEnd:   "[ gemini out ]",
+			msg:       "You said:\n[ CQ muse -> gemini #0001 ]\nold reply\n[ muse over #0001 ]",
+			turnID:    "beef",
+			wantStart: "[ CQ gemini -> muse #beef ]\n\nYou said:",
+			wantEnd:   "[ gemini over #beef ]",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			formatted := FormatTurn(tt.sender, tt.recipient, tt.msg)
+			formatted := FormatTurn(tt.sender, tt.recipient, tt.msg, tt.turnID)
 			if !strings.HasPrefix(formatted, tt.wantStart) {
 				t.Errorf("FormatTurn() got start %q, want prefix %q", formatted, tt.wantStart)
 			}
@@ -61,9 +48,19 @@ func TestFormatTurn(t *testing.T) {
 	}
 }
 
+func TestNewTurnIDIsDistinct(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 64; i++ {
+		seen[NewTurnID()] = true
+	}
+	if len(seen) < 8 {
+		t.Fatalf("NewTurnID() produced only %d distinct ids in 64 draws", len(seen))
+	}
+}
+
 func TestFormatBootstrapPrompt(t *testing.T) {
 	t.Run("read only true", func(t *testing.T) {
-		prompt := FormatBootstrapPrompt("gemini", "muse", "/test/dir", true)
+		prompt := FormatBootstrapPrompt("gemini", "muse", "/test/dir", "a1b2", true)
 		if !strings.Contains(prompt, "READ-ONLY permissions") {
 			t.Errorf("expected read-only warning in prompt")
 		}
@@ -76,10 +73,16 @@ func TestFormatBootstrapPrompt(t *testing.T) {
 		if !strings.Contains(prompt, "Working Directory: /test/dir") {
 			t.Errorf("expected working directory")
 		}
+		if !strings.Contains(prompt, "This turn's id is a1b2.") {
+			t.Errorf("expected the turn id to be stated in the prompt")
+		}
+		if !strings.Contains(prompt, "linting, type checking, compiling, or running the test suite") {
+			t.Errorf("expected the follower to be told it may request benign verification from the lead")
+		}
 	})
 
 	t.Run("read only false", func(t *testing.T) {
-		prompt := FormatBootstrapPrompt("gemini", "muse", "/test/dir", false)
+		prompt := FormatBootstrapPrompt("gemini", "muse", "/test/dir", "a1b2", false)
 		if strings.Contains(prompt, "READ-ONLY permissions") {
 			t.Errorf("did not expect read-only warning when readOnly is false")
 		}
@@ -103,7 +106,7 @@ func TestExtractLatestTurn(t *testing.T) {
   ┃
   • OpenCode 1.18.30
 `
-		body, found := ExtractLatestTurn(screen, "muse", "gemini")
+		body, found := ExtractLatestTurn(screen, "muse", "gemini", "")
 		if !found {
 			t.Fatalf("expected to find turn, but found nothing")
 		}
@@ -119,7 +122,7 @@ func TestExtractLatestTurn(t *testing.T) {
 Session complete. Goodbye!
 [ muse out ]
 `
-		body, found := ExtractLatestTurn(screen, "muse", "gemini")
+		body, found := ExtractLatestTurn(screen, "muse", "gemini", "")
 		if !found {
 			t.Fatalf("expected to find turn with out")
 		}
@@ -134,7 +137,7 @@ CQ muse -> gemini
 Here is a relaxed response without brackets.
 muse over
 `
-		body, found := ExtractLatestTurn(screen, "muse", "gemini")
+		body, found := ExtractLatestTurn(screen, "muse", "gemini", "")
 		if !found {
 			t.Fatalf("expected to find relaxed turn")
 		}
@@ -149,7 +152,7 @@ Here is some output from agent.
 The task is finished.
 muse over
 `
-		body, found := ExtractLatestTurn(screen, "muse", "gemini")
+		body, found := ExtractLatestTurn(screen, "muse", "gemini", "")
 		if !found {
 			t.Fatalf("expected to find fallback turn")
 		}
@@ -166,7 +169,7 @@ Previous context
 Here is the actual answer
 [ muse over ]
 `
-		body, found := ExtractLatestTurn(screen, "muse", "gemini")
+		body, found := ExtractLatestTurn(screen, "muse", "gemini", "")
 		if !found {
 			t.Fatalf("expected to find fallback with delimiter")
 		}
@@ -177,7 +180,7 @@ Here is the actual answer
 
 	t.Run("no turn found", func(t *testing.T) {
 		screen := "Just random logs without any turn markers"
-		body, found := ExtractLatestTurn(screen, "muse", "gemini")
+		body, found := ExtractLatestTurn(screen, "muse", "gemini", "")
 		if found {
 			t.Fatalf("expected no turn found, got %q", body)
 		}
@@ -233,11 +236,25 @@ func TestHasTurnFinished(t *testing.T) {
 			sender:   "muse",
 			expected: false,
 		},
+		{
+			// Regression: a bare word-boundary match treated ordinary prose as
+			// an end-of-turn marker and cut the reply short.
+			name:     "prose mentioning the callsign is not a marker",
+			screen:   "For this job I would pick muse over codex, because it reads faster.",
+			sender:   "muse",
+			expected: false,
+		},
+		{
+			name:     "marker carrying a turn id",
+			screen:   "[ muse over #a1b2 ]",
+			sender:   "muse",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := HasTurnFinished(tt.screen, tt.sender)
+			got := HasTurnFinished(tt.screen, tt.sender, "")
 			if got != tt.expected {
 				t.Errorf("HasTurnFinished() = %v, want %v", got, tt.expected)
 			}
@@ -247,14 +264,86 @@ func TestHasTurnFinished(t *testing.T) {
 
 func TestCountTurnEndMarkers(t *testing.T) {
 	screen := "[ muse over ]\nold output\n[ muse out ]\n[ codex over ]"
-	if got := CountTurnEndMarkers(screen, "muse"); got != 2 {
+	if got := CountTurnEndMarkers(screen, "muse", ""); got != 2 {
 		t.Fatalf("CountTurnEndMarkers() = %d, want 2", got)
 	}
 }
 
 func TestBootstrapDoesNotEchoConcreteFollowerMarkers(t *testing.T) {
-	prompt := FormatBootstrapPrompt("codex", "gemini-3.8-flash", "/tmp/repo", true)
-	if CountTurnEndMarkers(prompt, "gemini-3.8-flash") != 0 {
+	prompt := FormatBootstrapPrompt("codex", "gemini-3.8-flash", "/tmp/repo", "a1b2", true)
+	if CountTurnEndMarkers(prompt, "gemini-3.8-flash", "") != 0 {
 		t.Fatal("bootstrap prompt contains a concrete follower completion marker")
+	}
+}
+
+func TestIsTurnComplete(t *testing.T) {
+	// The pane shows the leader's prompt echoed back, then the follower's reply.
+	sent := FormatTurn("codex", "muse", "Review the diff.", "beef")
+
+	t.Run("id tagged reply completes the turn", func(t *testing.T) {
+		screen := sent + "\n[ CQ muse -> codex #beef ]\nLooks fine.\n[ muse over #beef ]\n"
+		if !IsTurnComplete(screen, "muse", "codex", "beef") {
+			t.Fatal("expected the id-tagged reply to complete the turn")
+		}
+	})
+
+	t.Run("untagged reply after the prompt echo completes the turn", func(t *testing.T) {
+		screen := sent + "\n[ CQ muse -> codex ]\nLooks fine.\n[ muse over ]\n"
+		if !IsTurnComplete(screen, "muse", "codex", "beef") {
+			t.Fatal("expected an untagged reply inside the window to complete the turn")
+		}
+	})
+
+	t.Run("prompt echo alone does not complete the turn", func(t *testing.T) {
+		if IsTurnComplete(sent, "muse", "codex", "beef") {
+			t.Fatal("the echoed prompt completed the turn on its own")
+		}
+	})
+
+	t.Run("quoted earlier reply does not complete the turn", func(t *testing.T) {
+		// Regression: quoting the follower's previous reply back to it put a
+		// completion marker on screen after the watermark, so wait() returned
+		// immediately with stale content.
+		quoted := FormatTurn("codex", "muse",
+			"You previously said:\n[ CQ muse -> codex #0001 ]\nUse a mutex.\n[ muse over #0001 ]\nDoes that still hold?",
+			"beef")
+		if IsTurnComplete(quoted, "muse", "codex", "beef") {
+			t.Fatal("a marker quoted inside the prompt completed the turn")
+		}
+	})
+
+	t.Run("stale scrollback does not complete the turn", func(t *testing.T) {
+		screen := "[ CQ muse -> codex #0001 ]\nOld answer.\n[ muse over #0001 ]\n" + sent
+		if IsTurnComplete(screen, "muse", "codex", "beef") {
+			t.Fatal("a marker left in scrollback completed the turn")
+		}
+	})
+
+	t.Run("prose is not a marker", func(t *testing.T) {
+		screen := sent + "\nI would pick muse over codex here, still working.\n"
+		if IsTurnComplete(screen, "muse", "codex", "beef") {
+			t.Fatal("prose mentioning the callsign completed the turn")
+		}
+	})
+
+	t.Run("without an id and without the echo nothing completes", func(t *testing.T) {
+		if IsTurnComplete("[ muse over ]", "muse", "codex", "") {
+			t.Fatal("an unanchored, untagged marker completed the turn")
+		}
+	})
+}
+
+func TestExtractLatestTurnPrefersWindowOverQuotedReply(t *testing.T) {
+	sent := FormatTurn("codex", "muse",
+		"Earlier you said:\n[ CQ muse -> codex #0001 ]\nUse a mutex.\n[ muse over #0001 ]",
+		"beef")
+	screen := sent + "\n[ CQ muse -> codex #beef ]\nUse a channel instead.\n[ muse over #beef ]\n"
+
+	body, found := ExtractLatestTurn(screen, "muse", "codex", "beef")
+	if !found {
+		t.Fatal("expected to find the reply")
+	}
+	if body != "Use a channel instead." {
+		t.Fatalf("got %q, want the current reply rather than the quoted one", body)
 	}
 }

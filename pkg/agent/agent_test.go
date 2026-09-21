@@ -156,14 +156,19 @@ func TestOpenCodeAgent(t *testing.T) {
 		t.Errorf("DefaultCallsign(other) failed")
 	}
 
-	// BuildLaunchCommand default model & read-only
-	cmd, _, err := oa.BuildLaunchCommand(LaunchOptions{ReadOnly: true})
+	// A follower reads the whole workspace, so the model that receives it must
+	// be chosen deliberately rather than defaulted to.
+	if _, _, err := oa.BuildLaunchCommand(LaunchOptions{ReadOnly: true}); err == nil {
+		t.Fatal("expected BuildLaunchCommand to require an explicit model")
+	}
+
+	cmd, _, err := oa.BuildLaunchCommand(LaunchOptions{Model: "vendor/model", ReadOnly: true})
 	if err != nil {
 		t.Fatalf("BuildLaunchCommand failed: %v", err)
 	}
 	cmdStr := strings.Join(cmd, " ")
-	if !strings.Contains(cmdStr, "opencode/muse-spark-1.3-contributor-free") {
-		t.Errorf("expected default model, got %v", cmdStr)
+	if !strings.Contains(cmdStr, "-m vendor/model") {
+		t.Errorf("expected the requested model, got %v", cmdStr)
 	}
 	if !strings.Contains(cmdStr, "--agent plan") {
 		t.Errorf("expected --agent plan for ReadOnly")
@@ -200,22 +205,22 @@ func TestOpenCodeAgent(t *testing.T) {
 	}
 
 	// IsTurnFinished
-	if oa.IsTurnFinished("esc interrupt to cancel", "muse") {
+	if oa.IsTurnFinished("esc interrupt to cancel", "muse", "") {
 		t.Errorf("IsTurnFinished should be false during esc interrupt")
 	}
-	if oa.IsTurnFinished("Thinking...", "muse") {
+	if oa.IsTurnFinished("Thinking...", "muse", "") {
 		t.Errorf("IsTurnFinished should be false during Thinking")
 	}
-	if oa.IsTurnFinished("Loading ⠹ spinner", "muse") {
+	if oa.IsTurnFinished("Loading ⠹ spinner", "muse", "") {
 		t.Errorf("IsTurnFinished should be false during spinner")
 	}
-	if !oa.IsTurnFinished("▣ Plan completed", "muse") {
+	if !oa.IsTurnFinished("▣ Plan completed", "muse", "") {
 		t.Errorf("IsTurnFinished should be true for ▣ badge")
 	}
-	if !oa.IsTurnFinished("[ muse over ]", "muse") {
+	if !oa.IsTurnFinished("[ muse over ]", "muse", "") {
 		t.Errorf("IsTurnFinished should be true for muse over")
 	}
-	if oa.IsTurnFinished("Incomplete response", "muse") {
+	if oa.IsTurnFinished("Incomplete response", "muse", "") {
 		t.Errorf("IsTurnFinished should be false for incomplete response")
 	}
 }
@@ -268,7 +273,7 @@ func TestAgyAgent(t *testing.T) {
 	}
 
 	// IsTurnFinished
-	if !aa.IsTurnFinished("[ gemini over ]", "gemini") {
+	if !aa.IsTurnFinished("[ gemini over ]", "gemini", "") {
 		t.Errorf("IsTurnFinished failed for gemini")
 	}
 }
@@ -287,13 +292,24 @@ func TestClaudeAgent(t *testing.T) {
 	}
 
 	// BuildLaunchCommand
-	cmd, _, err := ca.BuildLaunchCommand(LaunchOptions{Model: "claude-3-7", ReadOnly: true})
+	cmd, _, err := ca.BuildLaunchCommand(LaunchOptions{Model: "opus", ReadOnly: true})
 	if err != nil {
 		t.Fatalf("BuildLaunchCommand failed: %v", err)
 	}
 	cmdStr := strings.Join(cmd, " ")
-	if !strings.Contains(cmdStr, "--model claude-3-7") || !strings.Contains(cmdStr, "--permission-mode plan --disallowed-tools Edit,Write,Bash") {
+	if !strings.Contains(cmdStr, "--model opus") {
 		t.Errorf("unexpected command: %v", cmdStr)
+	}
+	if !strings.Contains(cmdStr, "--permission-mode plan --disallowed-tools Edit,Write,NotebookEdit,Bash") {
+		t.Errorf("expected the mutating tools to be denied, got: %v", cmdStr)
+	}
+
+	cmd2, _, err := ca.BuildLaunchCommand(LaunchOptions{Model: "opus", ReadOnly: false})
+	if err != nil {
+		t.Fatalf("BuildLaunchCommand failed: %v", err)
+	}
+	if strings.Contains(strings.Join(cmd2, " "), "--permission-mode") {
+		t.Errorf("did not expect read-only hardening when ReadOnly is false")
 	}
 
 	// IsReady
@@ -305,7 +321,7 @@ func TestClaudeAgent(t *testing.T) {
 	}
 
 	// IsTurnFinished
-	if !ca.IsTurnFinished("[ claude over ]", "claude") {
+	if !ca.IsTurnFinished("[ claude over ]", "claude", "") {
 		t.Errorf("IsTurnFinished failed")
 	}
 
@@ -338,6 +354,9 @@ func TestCodexAgent(t *testing.T) {
 	if !strings.Contains(cmdStr, "--no-alt-screen") || !strings.Contains(cmdStr, "-m o3") || !strings.Contains(cmdStr, "-s read-only") {
 		t.Errorf("unexpected command: %v", cmdStr)
 	}
+	if !strings.Contains(cmdStr, "-a untrusted") {
+		t.Errorf("expected sandbox escalation to require approval, got: %v", cmdStr)
+	}
 
 	// IsReady
 	if !cda.IsReady("Codex CLI") || !cda.IsReady("OpenAI") {
@@ -348,14 +367,13 @@ func TestCodexAgent(t *testing.T) {
 	}
 
 	// IsTurnFinished
-	if !cda.IsTurnFinished("[ codex over ]", "codex") {
+	if !cda.IsTurnFinished("[ codex over ]", "codex", "") {
 		t.Errorf("IsTurnFinished failed")
 	}
 
-	// ListModels
-	models, err := cda.ListModels()
-	if err != nil || len(models) == 0 {
-		t.Fatalf("ListModels failed: %v", err)
+	// Codex has no listing command; saying so beats returning a stale snapshot.
+	if _, err := cda.ListModels(); err == nil {
+		t.Fatal("expected ListModels to report that codex cannot list models")
 	}
 }
 
@@ -392,5 +410,49 @@ func TestOpenCodeListModels(t *testing.T) {
 	}
 	if len(models) == 0 {
 		t.Errorf("expected non-empty models list")
+	}
+}
+
+func TestClaudeReadOnlyUsesAvailableHardening(t *testing.T) {
+	ca := &ClaudeAgent{}
+	if !ca.Available() {
+		t.Skip("claude binary not available")
+	}
+
+	cmd, _, err := ca.BuildLaunchCommand(LaunchOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BuildLaunchCommand failed: %v", err)
+	}
+	cmdStr := strings.Join(cmd, " ")
+
+	// The flags are added only when the installed CLI advertises them, so the
+	// expectation follows the binary rather than a pinned version.
+	for _, flag := range []string{"--restricted", "--strict-mcp-config"} {
+		want := supportsFlag("claude", flag)
+		if got := strings.Contains(cmdStr, flag); got != want {
+			t.Errorf("%s present = %v, want %v (command: %s)", flag, got, want, cmdStr)
+		}
+	}
+}
+
+func TestClaudeListModelsReportsAliasesNotSnapshots(t *testing.T) {
+	ca := &ClaudeAgent{}
+	models, err := ca.ListModels()
+	if err != nil {
+		t.Fatalf("ListModels failed: %v", err)
+	}
+
+	seen := map[string]bool{}
+	for _, m := range models {
+		seen[m] = true
+		// A dated model id pins a snapshot that goes stale; aliases do not.
+		if strings.HasPrefix(m, "claude-3-") {
+			t.Errorf("ListModels returned the superseded snapshot %q", m)
+		}
+	}
+	for _, alias := range []string{"opus", "sonnet", "haiku"} {
+		if !seen[alias] {
+			t.Errorf("expected alias %q in %v", alias, models)
+		}
 	}
 }

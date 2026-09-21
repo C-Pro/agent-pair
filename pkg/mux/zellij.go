@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 )
 
 type ZellijMux struct{}
@@ -60,16 +61,20 @@ func (z *ZellijMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 		return nil, fmt.Errorf("zellij run failed: %w (output: %s)", err, string(out))
 	}
 
-	match := zellijPaneRegex.FindString(string(out))
-	if match == "" {
-		// Fallback: if pane id not printed, use title or dump active
-		match = opts.Title
+	handle := &PaneHandle{MuxName: z.Name()}
+
+	// Resolve the pane id, then prove it addresses a real pane before anyone
+	// writes to it. The previous fallback used the pane *title* as an id, which
+	// zellij does not accept: text and a Return could land in whatever pane the
+	// bad target resolved to. Fail closed instead.
+	if match := zellijPaneRegex.FindString(string(out)); match != "" {
+		handle.PaneID = match
+		if alive, err := z.PaneAlive(handle); err == nil && alive {
+			return handle, nil
+		}
 	}
 
-	return &PaneHandle{
-		MuxName: z.Name(),
-		PaneID:  match,
-	}, nil
+	return nil, fmt.Errorf("zellij did not report an addressable pane id for the follower pane (got %q); close the stray pane and rerun with --mux tmux, which reports pane ids reliably", strings.TrimSpace(string(out)))
 }
 
 func (z *ZellijMux) SendText(handle *PaneHandle, text string) error {
@@ -77,11 +82,12 @@ func (z *ZellijMux) SendText(handle *PaneHandle, text string) error {
 		return fmt.Errorf("zellij is not installed")
 	}
 
-	// Write characters to the pane
-	args := []string{"action", "write-chars"}
-	if handle.PaneID != "" {
-		args = append(args, "-p", handle.PaneID)
+	if handle == nil || handle.PaneID == "" {
+		return fmt.Errorf("refusing to send text without a resolved zellij pane id")
 	}
+
+	// Write characters to the pane
+	args := []string{"action", "write-chars", "-p", handle.PaneID}
 	args = append(args, text)
 
 	writeCmd := exec.Command("zellij", args...)
@@ -90,11 +96,7 @@ func (z *ZellijMux) SendText(handle *PaneHandle, text string) error {
 	}
 
 	// Send enter key
-	keyArgs := []string{"action", "send-keys"}
-	if handle.PaneID != "" {
-		keyArgs = append(keyArgs, "-p", handle.PaneID)
-	}
-	keyArgs = append(keyArgs, "Enter")
+	keyArgs := []string{"action", "send-keys", "-p", handle.PaneID, "Enter"}
 
 	enterCmd := exec.Command("zellij", keyArgs...)
 	if out, err := enterCmd.CombinedOutput(); err != nil {
@@ -124,10 +126,10 @@ func (z *ZellijMux) CaptureOutput(handle *PaneHandle) (string, error) {
 		return "", fmt.Errorf("zellij is not installed")
 	}
 
-	args := []string{"action", "dump-screen", "-f"}
-	if handle.PaneID != "" {
-		args = append(args, "-p", handle.PaneID)
+	if handle == nil || handle.PaneID == "" {
+		return "", fmt.Errorf("refusing to capture output without a resolved zellij pane id")
 	}
+	args := []string{"action", "dump-screen", "-f", "-p", handle.PaneID}
 
 	cmd := exec.Command("zellij", args...)
 	var stdout bytes.Buffer
