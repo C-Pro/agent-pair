@@ -131,6 +131,8 @@ To handle multiplexer timeouts gracefully in Go:
 [ claude-opus-5 over #7f3a ]
 ```
 
+A Claude Code follower is launched with `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` so its replies stay in the pane's scrollback. Claude Code reads this variable from version 2.1.132. On older versions, a reply taller than the pane cannot be captured whole, and `wait` reports that instead of printing part of it.
+
 ### 4. Check Status
 ```bash
 agent-pair status

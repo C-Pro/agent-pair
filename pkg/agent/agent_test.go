@@ -132,6 +132,13 @@ func TestSanitizeLaunchCommand(t *testing.T) {
 			t.Errorf("expected suffix %q, got %q", v, lastElements[i])
 		}
 	}
+
+	// Adapters that set nothing pass a nil map: no assignments appear.
+	for _, arg := range SanitizeLaunchCommand(rawCmd, nil) {
+		if strings.Contains(arg, "=") {
+			t.Errorf("expected no env assignments for a nil env, got %q", arg)
+		}
+	}
 }
 
 func TestOpenCodeAgent(t *testing.T) {

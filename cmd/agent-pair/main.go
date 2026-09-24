@@ -500,7 +500,7 @@ func runWait(args []string) error {
 			// Printing a reply whose beginning never reached us, under a
 			// header we synthesize, would pass a fragment off as the answer.
 			if !protocol.ReplyStartVisible(output, sess.FollowerCallsign, sess.LeaderCallsign, sess.TurnID) {
-				return fmt.Errorf("the reply from %s to #%s is longer than the captured follower output, so its beginning is missing; ask %s to resend it in shorter parts with 'agent-pair turn'",
+				return fmt.Errorf("the reply from %s to #%s is longer than the captured follower output, so its beginning is missing; use 'agent-pair turn' to ask %s to resend it in shorter parts",
 					sess.FollowerCallsign, sess.TurnID, sess.FollowerCallsign)
 			}
 

@@ -1,9 +1,8 @@
 package protocol
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 )
@@ -11,14 +10,10 @@ import (
 // NewTurnID returns a short random identifier that tags one exchange. Every
 // turn carries its own id so a marker left in scrollback, or a marker inside a
 // quoted earlier reply, cannot be mistaken for the completion of this turn.
+// The id only has to differ from recent turns, not resist guessing, so
+// math/rand is enough.
 func NewTurnID() string {
-	var buf [2]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		// Randomness is a de-duplication aid, not a security control; a fixed
-		// id only degrades detection to the pre-nonce behaviour.
-		return "0000"
-	}
-	return hex.EncodeToString(buf[:])
+	return fmt.Sprintf("%04x", rand.IntN(1<<16))
 }
 
 // FormatTurn wraps message with radio turn markers tagged by turnID.
@@ -126,11 +121,11 @@ func IsTurnComplete(screen, followerCallsign, leaderCallsign, turnID string) boo
 }
 
 // ReplyStartVisible reports whether the beginning of the sender's reply to
-// turnID is inside the captured screen: either the reply's own id-tagged
-// opening header is there, or the recipient's echoed prompt is, so everything
-// after it was captured. When neither is, the reply is taller than what the
-// multiplexer returned and any extracted body is missing its beginning. With
-// no turn id there is nothing to anchor on, and the reply is assumed whole.
+// turnID is inside the captured screen: either the recipient's echoed prompt is
+// there, so everything after it was captured, or the reply's own opening header
+// is. When neither is, the reply is taller than what the multiplexer returned
+// and any extracted body is missing its beginning. With no turn id there is
+// nothing to anchor on, and the reply is assumed whole.
 func ReplyStartVisible(screen, sender, recipient, turnID string) bool {
 	if turnID == "" {
 		return true
@@ -139,9 +134,34 @@ func ReplyStartVisible(screen, sender, recipient, turnID string) bool {
 	if _, windowed := scanWindow(cleaned, recipient, turnID); windowed {
 		return true
 	}
-	headerRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\[\s*)?CQ\s+%s\s*->\s*%s\s*#\s*%s\b`,
-		regexp.QuoteMeta(sender), regexp.QuoteMeta(recipient), regexp.QuoteMeta(turnID)))
-	return headerRe.MatchString(cleaned)
+
+	qs := regexp.QuoteMeta(sender)
+	qr := regexp.QuoteMeta(recipient)
+	taggedRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\[\s*)?CQ\s+%s\s*->\s*%s\s*#\s*%s\b`, qs, qr, regexp.QuoteMeta(turnID)))
+	if taggedRe.MatchString(cleaned) {
+		return true
+	}
+
+	// Followers sometimes drop the id from the header. Such a header opens this
+	// reply only if it is the last header before this turn's closer and no
+	// other closer from the sender sits between them; otherwise it belongs to
+	// an earlier turn.
+	closers := turnEndPattern(sender, turnID).FindAllStringIndex(cleaned, -1)
+	if len(closers) == 0 {
+		return false
+	}
+	before := cleaned[:closers[len(closers)-1][0]]
+	headerRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\[\s*)?CQ\s+%s\s*->\s*%s(?:\s*#\s*([0-9a-zA-Z]+))?`, qs, qr))
+	headers := headerRe.FindAllStringSubmatchIndex(before, -1)
+	if len(headers) == 0 {
+		return false
+	}
+	last := headers[len(headers)-1]
+	if last[2] != -1 {
+		// Tagged with another turn's id; this turn's tag was checked above.
+		return false
+	}
+	return !turnEndPattern(sender, "").MatchString(before[last[1]:])
 }
 
 // ExtractLatestTurn finds the latest message sent by sender to recipient.

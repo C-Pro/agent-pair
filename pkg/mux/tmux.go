@@ -141,7 +141,9 @@ func (t *TmuxMux) CaptureOutput(handle *PaneHandle) (string, error) {
 		return "", fmt.Errorf("tmux is not installed")
 	}
 
-	cmd := exec.Command("tmux", "capture-pane", "-p", "-t", handle.PaneID, "-S", "-1000")
+	// Start at the top of the pane's history: a fixed depth cuts off the
+	// beginning of a reply taller than it.
+	cmd := exec.Command("tmux", "capture-pane", "-p", "-t", handle.PaneID, "-S", "-")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
