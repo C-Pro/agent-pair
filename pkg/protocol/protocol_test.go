@@ -347,3 +347,75 @@ func TestExtractLatestTurnPrefersWindowOverQuotedReply(t *testing.T) {
 		t.Fatalf("got %q, want the current reply rather than the quoted one", body)
 	}
 }
+
+func TestReplyStartVisible(t *testing.T) {
+	sent := FormatTurn("codex", "muse", "Review the diff.", "beef")
+
+	t.Run("reply header on screen", func(t *testing.T) {
+		screen := "[ CQ muse -> codex #beef ]\nA. First.\nB. Second.\n[ muse over #beef ]\n"
+		if !ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("expected the id-tagged header to mark the reply as whole")
+		}
+	})
+
+	t.Run("prompt echo on screen", func(t *testing.T) {
+		// A follower that drops the id from its header is still whole when the
+		// leader's own prompt is above it.
+		screen := sent + "\nLooks fine.\n[ muse over ]\n"
+		if !ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("expected the prompt echo to mark the reply as whole")
+		}
+	})
+
+	t.Run("beginning scrolled out of the capture", func(t *testing.T) {
+		// Regression: a follower on the alternate screen kept only the rows its
+		// pane showed, so wait printed sections E-F of a reply as the reply.
+		screen := "E. Risks.\nF. Questions.\n[ muse over #beef ]\n"
+		if ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("a reply without its header or the prompt echo was taken as whole")
+		}
+	})
+
+	t.Run("header of another turn does not count", func(t *testing.T) {
+		screen := "[ CQ muse -> codex #0001 ]\nOld.\n[ muse over #0001 ]\nF. Questions.\n[ muse over #beef ]\n"
+		if ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("an earlier turn's header was taken as this reply's beginning")
+		}
+	})
+
+	t.Run("reply header without the id", func(t *testing.T) {
+		screen := "[ CQ muse -> codex ]\nA. First.\nF. Questions.\n[ muse over #beef ]\n"
+		if !ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("expected an untagged header right before this turn's closer to mark the reply as whole")
+		}
+	})
+
+	t.Run("untagged header of an earlier turn does not count", func(t *testing.T) {
+		screen := "[ CQ muse -> codex ]\nOld.\n[ muse over ]\nF. Questions.\n[ muse over #beef ]\n"
+		if ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("an earlier turn's untagged header was taken as this reply's beginning")
+		}
+	})
+
+	t.Run("header tagged with another id does not count", func(t *testing.T) {
+		screen := "[ CQ muse -> codex #0001 ]\nF. Questions.\n[ muse over #beef ]\n"
+		if ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("a header tagged with another turn's id was taken as this reply's beginning")
+		}
+	})
+
+	t.Run("claude code rendering", func(t *testing.T) {
+		// Claude Code prefixes the reply with a bullet, indents it, and can wrap
+		// the header before the id.
+		screen := "⏺ [ CQ muse -> codex\n  #beef ]\n  A. First.\n  [ muse over #beef ]\n"
+		if !ReplyStartVisible(screen, "muse", "codex", "beef") {
+			t.Fatal("expected a wrapped, prefixed header to mark the reply as whole")
+		}
+	})
+
+	t.Run("no turn id", func(t *testing.T) {
+		if !ReplyStartVisible("F. Questions.\n[ muse over ]\n", "muse", "codex", "") {
+			t.Fatal("without a turn id the reply should be assumed whole")
+		}
+	})
+}

@@ -412,6 +412,70 @@ func TestRunWait(t *testing.T) {
 	}
 }
 
+func TestRunWaitRejectsReplyMissingItsBeginning(t *testing.T) {
+	tempDir := setupTestEnv(t)
+
+	sess := &session.Session{
+		ID:               "pair-test-truncated",
+		MuxName:          "tmux",
+		PaneHandle:       &mux.PaneHandle{MuxName: "tmux", PaneID: "%42"},
+		LeaderAgent:      "agy",
+		LeaderCallsign:   "gemini",
+		FollowerAgent:    "opencode",
+		FollowerCallsign: "muse",
+		TurnID:           "beef",
+		CreatedAt:        time.Now(),
+	}
+	if err := session.Save(sess); err != nil {
+		t.Fatalf("session.Save failed: %v", err)
+	}
+	// Only the tail of the reply fits in the capture: no prompt echo, no header.
+	if err := os.WriteFile(filepath.Join(tempDir, "tmux-transcript"),
+		[]byte("E. Risks.\nF. Questions.\n[ muse over #beef ]\n"), 0644); err != nil {
+		t.Fatalf("failed to seed mock transcript: %v", err)
+	}
+
+	err := runWait([]string{"-timeout", "2"})
+	if err == nil || !strings.Contains(err.Error(), "beginning is missing") {
+		t.Fatalf("expected a truncated reply to be refused, got %v", err)
+	}
+
+	// -raw prints the capture as it is, without a synthesized header, so it
+	// is not refused.
+	if err := runWait([]string{"-timeout", "2", "-raw"}); err != nil {
+		t.Fatalf("runWait -raw failed: %v", err)
+	}
+}
+
+func TestRunWaitAcceptsHeaderWithoutID(t *testing.T) {
+	tempDir := setupTestEnv(t)
+
+	sess := &session.Session{
+		ID:               "pair-test-untagged-header",
+		MuxName:          "tmux",
+		PaneHandle:       &mux.PaneHandle{MuxName: "tmux", PaneID: "%42"},
+		LeaderAgent:      "agy",
+		LeaderCallsign:   "gemini",
+		FollowerAgent:    "opencode",
+		FollowerCallsign: "muse",
+		TurnID:           "beef",
+		CreatedAt:        time.Now(),
+	}
+	if err := session.Save(sess); err != nil {
+		t.Fatalf("session.Save failed: %v", err)
+	}
+	// The prompt echo scrolled off and the follower dropped the id from its
+	// header, but the whole reply is on screen.
+	if err := os.WriteFile(filepath.Join(tempDir, "tmux-transcript"),
+		[]byte("[ CQ muse -> gemini ]\nwhole reply\n[ muse over #beef ]\n"), 0644); err != nil {
+		t.Fatalf("failed to seed mock transcript: %v", err)
+	}
+
+	if err := runWait([]string{"-timeout", "2"}); err != nil {
+		t.Fatalf("expected a whole reply with an untagged header to be accepted, got %v", err)
+	}
+}
+
 func TestRunTurn(t *testing.T) {
 	setupTestEnv(t)
 

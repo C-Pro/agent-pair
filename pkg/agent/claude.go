@@ -53,7 +53,12 @@ func (c *ClaudeAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[stri
 		}
 	}
 
-	return cmd, nil, nil
+	// The default renderer draws on the alternate screen, which keeps no
+	// scrollback: a capture sees only the rows the pane shows, and a reply
+	// taller than the pane arrives without its beginning.
+	env := map[string]string{"CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1"}
+
+	return cmd, env, nil
 }
 
 func (c *ClaudeAgent) IsReady(screenOutput string) bool {

@@ -111,7 +111,7 @@ func TestRegistry(t *testing.T) {
 
 func TestSanitizeLaunchCommand(t *testing.T) {
 	rawCmd := []string{"opencode", "-m", "model"}
-	sanitized := SanitizeLaunchCommand(rawCmd)
+	sanitized := SanitizeLaunchCommand(rawCmd, map[string]string{"B": "2", "A": "1"})
 
 	if len(sanitized) <= len(rawCmd) {
 		t.Fatalf("expected sanitized command to have env unsets")
@@ -121,10 +121,22 @@ func TestSanitizeLaunchCommand(t *testing.T) {
 		t.Errorf("expected first element to be env, got %q", sanitized[0])
 	}
 
+	envAt := len(sanitized) - len(rawCmd) - 2
+	if got := sanitized[envAt : envAt+2]; got[0] != "A=1" || got[1] != "B=2" {
+		t.Errorf("expected sorted env assignments before the command, got %q", got)
+	}
+
 	lastElements := sanitized[len(sanitized)-len(rawCmd):]
 	for i, v := range rawCmd {
 		if lastElements[i] != v {
 			t.Errorf("expected suffix %q, got %q", v, lastElements[i])
+		}
+	}
+
+	// Adapters that set nothing pass a nil map: no assignments appear.
+	for _, arg := range SanitizeLaunchCommand(rawCmd, nil) {
+		if strings.Contains(arg, "=") {
+			t.Errorf("expected no env assignments for a nil env, got %q", arg)
 		}
 	}
 }
@@ -292,9 +304,12 @@ func TestClaudeAgent(t *testing.T) {
 	}
 
 	// BuildLaunchCommand
-	cmd, _, err := ca.BuildLaunchCommand(LaunchOptions{Model: "opus", ReadOnly: true})
+	cmd, env, err := ca.BuildLaunchCommand(LaunchOptions{Model: "opus", ReadOnly: true})
 	if err != nil {
 		t.Fatalf("BuildLaunchCommand failed: %v", err)
+	}
+	if env["CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN"] != "1" {
+		t.Errorf("expected the alternate screen to be disabled so replies stay in scrollback, got env %v", env)
 	}
 	cmdStr := strings.Join(cmd, " ")
 	if !strings.Contains(cmdStr, "--model opus") {
