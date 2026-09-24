@@ -120,7 +120,7 @@ agent-pair turn "How should we handle multiplexer timeouts gracefully in Go?"
 
 Output:
 ```text
-==> Turn sent to claude-opus-5 [%17]
+==> Turn sent to claude-opus-5 [#7f3a]
 [ CQ claude-opus-5 -> claude #7f3a ]
 
 To handle multiplexer timeouts gracefully in Go:

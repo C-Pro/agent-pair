@@ -174,7 +174,7 @@ func runStart(args []string) error {
 	}
 
 	// Build follower launch command
-	cmd, _, err := followerAdapter.BuildLaunchCommand(agent.LaunchOptions{
+	cmd, env, err := followerAdapter.BuildLaunchCommand(agent.LaunchOptions{
 		Model:    targetModel,
 		Effort:   targetEffort,
 		ReadOnly: *readOnly,
@@ -184,7 +184,7 @@ func runStart(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to build launch command: %w", err)
 	}
-	cmd = agent.SanitizeLaunchCommand(cmd)
+	cmd = agent.SanitizeLaunchCommand(cmd, env)
 
 	title := fmt.Sprintf("[pair:%s]", fCallsign)
 	fmt.Printf("==> Launching %s (%s) in %s pane...\n", followerAdapter.Name(), fCallsign, m.Name())
@@ -443,7 +443,7 @@ func runSend(args []string) error {
 		return fmt.Errorf("failed to send turn message: %w", err)
 	}
 
-	fmt.Printf("==> Turn sent to %s [%s]\n", sess.FollowerCallsign, sess.PaneHandle.PaneID)
+	fmt.Printf("==> Turn sent to %s [#%s]\n", sess.FollowerCallsign, sess.TurnID)
 	return nil
 }
 
@@ -495,6 +495,13 @@ func runWait(args []string) error {
 			if *raw {
 				fmt.Println(output)
 				return nil
+			}
+
+			// Printing a reply whose beginning never reached us, under a
+			// header we synthesize, would pass a fragment off as the answer.
+			if !protocol.ReplyStartVisible(output, sess.FollowerCallsign, sess.LeaderCallsign, sess.TurnID) {
+				return fmt.Errorf("the reply from %s to #%s is longer than the captured follower output, so its beginning is missing; ask %s to resend it in shorter parts with 'agent-pair turn'",
+					sess.FollowerCallsign, sess.TurnID, sess.FollowerCallsign)
 			}
 
 			if body, found := protocol.ExtractLatestTurn(output, sess.FollowerCallsign, sess.LeaderCallsign, sess.TurnID); found {

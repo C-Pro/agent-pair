@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -83,7 +84,8 @@ func List() []string {
 // SanitizeLaunchCommand wraps a command with environment variable unsets
 // for outer terminal emulators (Kitty, Ghostty, WezTerm) so that background/split panes
 // do not trigger escape-sequence capability queries that leak into the active pane.
-func SanitizeLaunchCommand(cmd []string) []string {
+// env holds the variables the adapter asked to set for the follower.
+func SanitizeLaunchCommand(cmd []string, env map[string]string) []string {
 	prefix := []string{
 		"env",
 		"-u", "KITTY_WINDOW_ID",
@@ -95,6 +97,14 @@ func SanitizeLaunchCommand(cmd []string) []string {
 		"-u", "GHOSTTY_RESOURCES_DIR",
 		"-u", "WEZTERM_PANE",
 		"-u", "WEZTERM_EXECUTABLE",
+	}
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		prefix = append(prefix, k+"="+env[k])
 	}
 	return append(prefix, cmd...)
 }

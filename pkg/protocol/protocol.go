@@ -125,6 +125,25 @@ func IsTurnComplete(screen, followerCallsign, leaderCallsign, turnID string) boo
 	return turnEndPattern(followerCallsign, "").MatchString(window)
 }
 
+// ReplyStartVisible reports whether the beginning of the sender's reply to
+// turnID is inside the captured screen: either the reply's own id-tagged
+// opening header is there, or the recipient's echoed prompt is, so everything
+// after it was captured. When neither is, the reply is taller than what the
+// multiplexer returned and any extracted body is missing its beginning. With
+// no turn id there is nothing to anchor on, and the reply is assumed whole.
+func ReplyStartVisible(screen, sender, recipient, turnID string) bool {
+	if turnID == "" {
+		return true
+	}
+	cleaned := CleanTUIArtifacts(screen)
+	if _, windowed := scanWindow(cleaned, recipient, turnID); windowed {
+		return true
+	}
+	headerRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\[\s*)?CQ\s+%s\s*->\s*%s\s*#\s*%s\b`,
+		regexp.QuoteMeta(sender), regexp.QuoteMeta(recipient), regexp.QuoteMeta(turnID)))
+	return headerRe.MatchString(cleaned)
+}
+
 // ExtractLatestTurn finds the latest message sent by sender to recipient.
 func ExtractLatestTurn(screen, sender, recipient, turnID string) (string, bool) {
 	cleaned := CleanTUIArtifacts(screen)
