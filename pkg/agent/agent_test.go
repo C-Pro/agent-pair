@@ -369,7 +369,7 @@ func TestCodexAgent(t *testing.T) {
 	if !strings.Contains(cmdStr, "--no-alt-screen") || !strings.Contains(cmdStr, "-m o3") || !strings.Contains(cmdStr, "-s read-only") {
 		t.Errorf("unexpected command: %v", cmdStr)
 	}
-	if !strings.Contains(cmdStr, "-a untrusted") {
+	if !strings.Contains(cmdStr, "-a untrusted") && !strings.Contains(cmdStr, "-a on-request") {
 		t.Errorf("expected sandbox escalation to require approval, got: %v", cmdStr)
 	}
 
@@ -379,6 +379,9 @@ func TestCodexAgent(t *testing.T) {
 	}
 	if cda.IsReady("other") {
 		t.Errorf("IsReady should return false")
+	}
+	if cda.IsReady("Trust this folder? Codex can read...") {
+		t.Errorf("IsReady should return false during folder trust prompt")
 	}
 
 	// IsTurnFinished

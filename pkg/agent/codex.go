@@ -41,7 +41,11 @@ func (c *CodexAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[strin
 		cmd = append(cmd, "-s", "read-only")
 		// Escalation out of the sandbox needs a person. Without this the model
 		// decides for itself when to ask.
-		cmd = append(cmd, "-a", "untrusted")
+		if supportsFlag("codex", "untrusted") {
+			cmd = append(cmd, "-a", "untrusted")
+		} else {
+			cmd = append(cmd, "-a", "on-request")
+		}
 		if opts.Cwd != "" {
 			// Pin the sandbox root instead of inheriting whatever directory
 			// the pane happens to start in.
@@ -54,6 +58,9 @@ func (c *CodexAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[strin
 
 func (c *CodexAgent) IsReady(screenOutput string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
+	if strings.Contains(clean, "Trust this folder?") || strings.Contains(clean, "Trust and continue") {
+		return false
+	}
 	return strings.Contains(clean, "Codex") ||
 		strings.Contains(clean, "OpenAI")
 }
