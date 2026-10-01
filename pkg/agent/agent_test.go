@@ -383,6 +383,15 @@ func TestCodexAgent(t *testing.T) {
 	if cda.IsReady("Trust this folder? Codex can read...") {
 		t.Errorf("IsReady should return false during folder trust prompt")
 	}
+	if cda.IsReady("OpenAI Codex\nDo you trust the contents of this directory?\n› 1. Yes, continue\nPress enter to continue") {
+		t.Errorf("IsReady should return false during directory trust prompt")
+	}
+	if cda.IsReady("OpenAI Codex\nmodel: loading\n› Ask Codex to do anything") {
+		t.Errorf("IsReady should return false while model is loading")
+	}
+	if !cda.IsReady("OpenAI Codex\nDo you trust the contents of this directory?\n› 1. Yes, continue\nPress enter to continue\n╭───╮\n│ OpenAI Codex │\n│ model: gpt-6-astra │\n╰───╯\n› Ask Codex to do anything") {
+		t.Errorf("IsReady should return true once trust is confirmed and input prompt is rendered")
+	}
 
 	// IsTurnFinished
 	if !cda.IsTurnFinished("[ codex over ]", "codex", "") {
