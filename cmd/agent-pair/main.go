@@ -228,6 +228,10 @@ func runStart(args []string) error {
 
 	for time.Since(startTime) < timeout {
 		time.Sleep(1 * time.Second)
+		alive, err := m.PaneAlive(handle)
+		if err == nil && !alive {
+			return fmt.Errorf("follower pane closed unexpectedly during startup (check if follower process crashed)")
+		}
 		output, err := m.CaptureOutput(handle)
 		if err != nil {
 			continue
@@ -285,6 +289,10 @@ func runStart(args []string) error {
 		ackStart := time.Now()
 		for time.Since(ackStart) < timeout {
 			time.Sleep(1 * time.Second)
+			alive, err := m.PaneAlive(handle)
+			if err == nil && !alive {
+				return fmt.Errorf("follower pane closed unexpectedly during handshake")
+			}
 			output, err := m.CaptureOutput(handle)
 			if err != nil {
 				continue

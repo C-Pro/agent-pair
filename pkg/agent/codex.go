@@ -41,7 +41,11 @@ func (c *CodexAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[strin
 		cmd = append(cmd, "-s", "read-only")
 		// Escalation out of the sandbox needs a person. Without this the model
 		// decides for itself when to ask.
-		cmd = append(cmd, "-a", "untrusted")
+		if supportsFlag("codex", "untrusted") {
+			cmd = append(cmd, "-a", "untrusted")
+		} else {
+			cmd = append(cmd, "-a", "on-request")
+		}
 		if opts.Cwd != "" {
 			// Pin the sandbox root instead of inheriting whatever directory
 			// the pane happens to start in.
@@ -54,8 +58,47 @@ func (c *CodexAgent) BuildLaunchCommand(opts LaunchOptions) ([]string, map[strin
 
 func (c *CodexAgent) IsReady(screenOutput string) bool {
 	clean := protocol.CleanTUIArtifacts(screenOutput)
-	return strings.Contains(clean, "Codex") ||
-		strings.Contains(clean, "OpenAI")
+	if !strings.Contains(clean, "Codex") && !strings.Contains(clean, "OpenAI") {
+		return false
+	}
+
+	// If the latest model status indicates it is still initializing, wait.
+	if lastModelIdx := strings.LastIndex(clean, "model:"); lastModelIdx != -1 {
+		modelLine := clean[lastModelIdx:]
+		if endLine := strings.Index(modelLine, "\n"); endLine != -1 {
+			modelLine = modelLine[:endLine]
+		}
+		if strings.Contains(modelLine, "loading") {
+			return false
+		}
+	}
+
+	// Folder trust prompt phrases across different Codex CLI / OS versions.
+	trustPhrases := []string{
+		"Do you trust the contents of this directory?",
+		"Trust this folder?",
+		"Trust and continue",
+		"Press enter to continue",
+		"1. Yes, continue",
+	}
+
+	lastTrustIdx := -1
+	for _, phrase := range trustPhrases {
+		if idx := strings.LastIndex(clean, phrase); idx > lastTrustIdx {
+			lastTrustIdx = idx
+		}
+	}
+
+	// If a trust prompt was displayed, ensure the user has answered it and
+	// Codex has rendered an active input prompt after the trust dialog.
+	if lastTrustIdx != -1 {
+		lastPromptIdx := strings.LastIndex(clean, "Ask Codex to do anything")
+		if lastPromptIdx <= lastTrustIdx {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (c *CodexAgent) IsTurnFinished(screenOutput string, callsign string, turnID string) bool {

@@ -42,7 +42,7 @@ Applied automatically in read-only mode (the default), when the installed CLI su
 | Follower | Applied flags | What it buys |
 | --- | --- | --- |
 | `claude` | `--permission-mode plan`, `--disallowed-tools Edit,Write,NotebookEdit,Bash`, `--restricted`, `--strict-mcp-config` | No mutating tools; no command- or code-running tools; file tools confined to the working directory; user/project settings files ignored, so a local setting cannot widen permissions; no MCP servers, closing the widest path for data to leave the machine |
-| `codex` | `-s read-only`, `-a untrusted`, `-C <cwd>` | OS-level read-only sandbox; escalation out of it requires a human; sandbox root pinned to the workspace |
+| `codex` | `-s read-only`, `-a on-request`, `-C <cwd>` | OS-level read-only sandbox; escalation out of it requires a human; sandbox root pinned to the workspace |
 | `agy` | `--mode plan`, `--sandbox` | Plan mode inside the sandbox |
 | `opencode` | `--agent plan`, `--pure` | Plan agent denies edit and write; no third-party plugins loaded |
 
