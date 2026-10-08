@@ -184,7 +184,7 @@ Detection fails closed: if two hosts' variables are present, or none are, `agent
 | `models [agent]` | Lists the models the chosen agent accepts, read from that CLI where it can report them |
 
 ### Flags for `agent-pair start`
-- `--mux`: Multiplexer (`auto`, `tmux`, `zellij`, `herdr`). Prefer `tmux`: it reports pane ids reliably, so text is always addressed to a verified pane. `zellij` refuses to start a session when it cannot resolve one
+- `--mux`: Multiplexer (`auto`, `tmux`, `zellij`, `herdr`). Prefer `tmux`: it reports pane ids reliably, so text is always addressed to a verified pane. `zellij` refuses to start a session when it cannot resolve one. `zellij` must be 0.45.0 or newer
 - `--follower`: Peer agent (`claude`, `codex`, `agy`, `opencode`; default `claude`)
 - `--leader`: Leading agent (`agy`, `opencode`, `claude`, `codex`)
 - `--model`: Model ID to pass to the follower agent (e.g. `claude-opus-5`). Required for `opencode`, which otherwise has no safe default; for the other followers it is optional but worth setting, since without it the follower runs on whatever its CLI defaults to and the callsign falls back to the agent name
@@ -194,7 +194,7 @@ Detection fails closed: if two hosts' variables are present, or none are, `agent
 - `--read-only`: Enforce read-only mode on follower (default: `true`)
 - `--cwd`: Working directory (defaults to current directory)
 - `--direction`: Split direction (`horizontal`, `vertical`)
-- `--size`: Split size percentage (default: `45%`)
+- `--size`: Split size percentage (default: `45%`). Applied by `tmux` and `herdr`; `zellij run` has no size option for tiled panes, so `zellij` ignores it
 
 ---
 

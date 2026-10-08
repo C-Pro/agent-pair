@@ -28,6 +28,10 @@ func (z *ZellijMux) DetectActive() bool {
 	return os.Getenv("ZELLIJ") != ""
 }
 
+// zellijMinVersion is the first zellij release whose `zellij run` accepts
+// both --near-current-pane and --no-focus.
+const zellijMinVersion = "0.45.0"
+
 var zellijPaneRegex = regexp.MustCompile(`(terminal_\d+|\d+)`)
 
 func (z *ZellijMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
@@ -47,7 +51,11 @@ func (z *ZellijMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 	if opts.Cwd != "" {
 		args = append(args, "--cwd", opts.Cwd)
 	}
-	args = append(args, "--direction", direction, "--no-focus", "--")
+	// --near-current-pane opens the pane next to the pane agent-pair was
+	// started from (the leader's pane, read from ZELLIJ_PANE_ID) instead of in
+	// the tab the user is currently looking at. zellij run has no size option
+	// for tiled panes, so opts.Size is not applied.
+	args = append(args, "--direction", direction, "--near-current-pane", "--no-focus", "--")
 
 	if len(opts.Command) > 0 {
 		args = append(args, opts.Command...)
@@ -58,6 +66,9 @@ func (z *ZellijMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 	cmd := exec.Command("zellij", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if strings.Contains(string(out), "unexpected argument") {
+			return nil, fmt.Errorf("zellij run rejected its arguments; agent-pair needs zellij %s or newer for --near-current-pane and --no-focus: %w (output: %s)", zellijMinVersion, err, string(out))
+		}
 		return nil, fmt.Errorf("zellij run failed: %w (output: %s)", err, string(out))
 	}
 

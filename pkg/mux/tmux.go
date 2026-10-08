@@ -43,7 +43,21 @@ func (t *TmuxMux) CreatePane(opts PaneOptions) (*PaneHandle, error) {
 		size = opts.Size
 	}
 
-	args := []string{"split-window", "-d", splitFlag, "-p", fmt.Sprintf("%d", size), "-P", "-F", "#{pane_id}"}
+	// -l N% replaces -p N, which tmux deprecated in 3.1.
+	args := []string{"split-window", "-d", splitFlag, "-l", fmt.Sprintf("%d%%", size), "-P", "-F", "#{pane_id}"}
+	// Split the pane agent-pair was started from (the leader's pane). Without
+	// a target, tmux splits the active pane of the client's current window,
+	// which is a different window if the user has switched away.
+	if leaderPane := os.Getenv("TMUX_PANE"); leaderPane != "" {
+		// TMUX_PANE can name a pane that no longer exists, for example when
+		// the environment was inherited from another tmux server. Targeting it
+		// would fail the split, so fall back to tmux's default target.
+		if alive, _ := t.PaneAlive(&PaneHandle{PaneID: leaderPane}); alive {
+			args = append(args, "-t", leaderPane)
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: TMUX_PANE=%s is not a live pane; splitting the active pane instead\n", leaderPane)
+		}
+	}
 	if opts.Cwd != "" {
 		args = append(args, "-c", opts.Cwd)
 	}
