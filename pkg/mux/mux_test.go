@@ -388,7 +388,7 @@ case "$cmd" in
     shift
     case "$sub" in
       split)
-        echo "herdr-pane-99"
+        echo '{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p99","tab_id":"w1:t1"},"type":"pane_info"}}'
         ;;
       read)
         echo "herdr mock screen output"
@@ -547,8 +547,8 @@ func TestHerdrMuxOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePane failed: %v", err)
 	}
-	if handleH.PaneID != "herdr-pane-99" {
-		t.Errorf("got PaneID %q, want 'herdr-pane-99'", handleH.PaneID)
+	if handleH.PaneID != "w1:p99" {
+		t.Errorf("got PaneID %q, want 'w1:p99'", handleH.PaneID)
 	}
 
 	optsV := PaneOptions{
@@ -558,8 +558,8 @@ func TestHerdrMuxOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePane vertical failed: %v", err)
 	}
-	if handleV.PaneID != "herdr-pane-99" {
-		t.Errorf("got PaneID %q, want 'herdr-pane-99'", handleV.PaneID)
+	if handleV.PaneID != "w1:p99" {
+		t.Errorf("got PaneID %q, want 'w1:p99'", handleV.PaneID)
 	}
 
 	// SendText
@@ -627,5 +627,224 @@ func TestZellijRefusesToWriteWithoutPaneID(t *testing.T) {
 	}
 	if _, err := zm.CaptureOutput(&PaneHandle{MuxName: "zellij"}); err == nil {
 		t.Fatal("expected CaptureOutput to refuse an unresolved pane id")
+	}
+}
+
+// writeArgLoggingMock installs a mock binary that appends its arguments to a
+// log file and then runs body, so tests can assert how a pane was targeted.
+func writeArgLoggingMock(t *testing.T, name, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "args.log")
+	script := "#!/bin/sh\necho \"$*\" >> '" + logPath + "'\n" + body + "\n"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write mock %s: %v", name, err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return logPath
+}
+
+// loggedCall returns the first command line recorded by the mock that starts
+// with prefix.
+func loggedCall(t *testing.T, logPath, prefix string) string {
+	t.Helper()
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read mock log: %v", err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return line
+		}
+	}
+	t.Fatalf("no %q call in mock log:\n%s", prefix, data)
+	return ""
+}
+
+// assertBefore fails unless first appears in call before second.
+func assertBefore(t *testing.T, call, first, second string) {
+	t.Helper()
+	i, j := strings.Index(call, first), strings.Index(call, second)
+	if i < 0 || j < 0 || i > j {
+		t.Errorf("expected %q before %q in %q", first, second, call)
+	}
+}
+
+// tmuxMock reports %7 as the only live pane and %42 as every new pane.
+const tmuxMock = `if [ "$1" = display-message ]; then
+  [ "$4" = "%7" ] || exit 1
+  echo "$4"
+else
+  echo "%42"
+fi`
+
+// herdrMock reports w1:p2 as the only existing pane before the split.
+const herdrMock = `if [ "$1 $2" = "pane read" ] && [ "$3" != "w1:p2" ]; then exit 1; fi
+echo '` + herdrSplitResponse + `'`
+
+func TestCreatePaneTargetsLeaderPane(t *testing.T) {
+	t.Run("tmux splits TMUX_PANE", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "tmux", tmuxMock)
+		t.Setenv("TMUX_PANE", "%7")
+		if _, err := (&TmuxMux{}).CreatePane(PaneOptions{Cwd: "/tmp", Command: []string{"echo"}}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		call := loggedCall(t, logPath, "split-window")
+		if !strings.Contains(call, "-t %7") {
+			t.Errorf("expected split-window to target %%7, got %q", call)
+		}
+		assertBefore(t, call, "-t %7", " -- ")
+		assertBefore(t, call, "-c /tmp", " -- ")
+	})
+
+	t.Run("tmux without TMUX_PANE omits target", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "tmux", tmuxMock)
+		t.Setenv("TMUX_PANE", "")
+		if _, err := (&TmuxMux{}).CreatePane(PaneOptions{}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		if call := loggedCall(t, logPath, "split-window"); strings.Contains(call, "-t") {
+			t.Errorf("expected no -t without TMUX_PANE, got %q", call)
+		}
+	})
+
+	t.Run("tmux with stale TMUX_PANE omits target", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "tmux", tmuxMock)
+		t.Setenv("TMUX_PANE", "%9")
+		if _, err := (&TmuxMux{}).CreatePane(PaneOptions{}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		if call := loggedCall(t, logPath, "split-window"); strings.Contains(call, "-t") {
+			t.Errorf("expected no -t for a stale TMUX_PANE, got %q", call)
+		}
+	})
+
+	t.Run("zellij opens near current pane", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "zellij", "echo terminal_7")
+		if _, err := (&ZellijMux{}).CreatePane(PaneOptions{Command: []string{"echo"}}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		call := loggedCall(t, logPath, "run")
+		if !strings.Contains(call, "--near-current-pane") {
+			t.Errorf("expected --near-current-pane, got %q", call)
+		}
+		assertBefore(t, call, "--near-current-pane", " -- ")
+	})
+
+	t.Run("herdr splits HERDR_PANE_ID", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "herdr", herdrMock)
+		t.Setenv("HERDR_PANE_ID", "w1:p2")
+		if _, err := (&HerdrMux{}).CreatePane(PaneOptions{}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		if call := loggedCall(t, logPath, "pane split"); !strings.Contains(call, "--pane w1:p2") {
+			t.Errorf("expected split to target pane w1:p2, got %q", call)
+		}
+	})
+
+	t.Run("herdr without HERDR_PANE_ID omits target", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "herdr", herdrMock)
+		t.Setenv("HERDR_PANE_ID", "")
+		if _, err := (&HerdrMux{}).CreatePane(PaneOptions{}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		if call := loggedCall(t, logPath, "pane split"); strings.Contains(call, "--pane") {
+			t.Errorf("expected no --pane without HERDR_PANE_ID, got %q", call)
+		}
+	})
+
+	t.Run("herdr with stale HERDR_PANE_ID omits target", func(t *testing.T) {
+		logPath := writeArgLoggingMock(t, "herdr", herdrMock)
+		t.Setenv("HERDR_PANE_ID", "w1:p9")
+		if _, err := (&HerdrMux{}).CreatePane(PaneOptions{}); err != nil {
+			t.Fatalf("CreatePane failed: %v", err)
+		}
+		if call := loggedCall(t, logPath, "pane split"); strings.Contains(call, "--pane") {
+			t.Errorf("expected no --pane for a stale HERDR_PANE_ID, got %q", call)
+		}
+	})
+}
+
+func TestTmuxCreatePaneSize(t *testing.T) {
+	logPath := writeArgLoggingMock(t, "tmux", tmuxMock)
+	t.Setenv("TMUX_PANE", "")
+	if _, err := (&TmuxMux{}).CreatePane(PaneOptions{Size: 30}); err != nil {
+		t.Fatalf("CreatePane failed: %v", err)
+	}
+	if call := loggedCall(t, logPath, "split-window"); !strings.Contains(call, "-l 30%") || strings.Contains(call, " -p ") {
+		t.Errorf("expected -l 30%% and no -p, got %q", call)
+	}
+}
+
+func TestHerdrCreatePaneSizeAndTitle(t *testing.T) {
+	logPath := writeArgLoggingMock(t, "herdr", herdrMock)
+	t.Setenv("HERDR_PANE_ID", "")
+
+	if _, err := (&HerdrMux{}).CreatePane(PaneOptions{Size: 30, Title: "[pair:x]"}); err != nil {
+		t.Fatalf("CreatePane failed: %v", err)
+	}
+	if call := loggedCall(t, logPath, "pane split"); !strings.Contains(call, "--ratio 0.70") {
+		t.Errorf("expected --ratio 0.70 for a 30%% follower pane, got %q", call)
+	}
+	if call := loggedCall(t, logPath, "pane rename"); call != "pane rename w1:p4 [pair:x]" {
+		t.Errorf("expected rename of the new pane, got %q", call)
+	}
+}
+
+func TestHerdrCreatePaneClosesPaneWhenRunFails(t *testing.T) {
+	logPath := writeArgLoggingMock(t, "herdr", `[ "$1 $2" = "pane run" ] && exit 1
+echo '`+herdrSplitResponse+`'`)
+	t.Setenv("HERDR_PANE_ID", "")
+
+	if _, err := (&HerdrMux{}).CreatePane(PaneOptions{Command: []string{"echo"}}); err == nil {
+		t.Fatal("expected CreatePane to fail when pane run fails")
+	}
+	if call := loggedCall(t, logPath, "pane close"); call != "pane close w1:p4" {
+		t.Errorf("expected the new pane to be closed, got %q", call)
+	}
+}
+
+func TestZellijCreatePaneReportsOldVersion(t *testing.T) {
+	writeArgLoggingMock(t, "zellij", `echo "error: unexpected argument '--near-current-pane' found" >&2
+exit 2`)
+	_, err := (&ZellijMux{}).CreatePane(PaneOptions{Command: []string{"echo"}})
+	if err == nil || !strings.Contains(err.Error(), zellijMinVersion) {
+		t.Fatalf("expected an error naming zellij %s, got %v", zellijMinVersion, err)
+	}
+}
+
+const herdrSplitResponse = `{"id":"cli:pane:split","result":{"pane":{"pane_id":"w1:p4","tab_id":"w1:t1"},"type":"pane_info"}}`
+
+func TestParseHerdrSplitPaneID(t *testing.T) {
+	got, err := parseHerdrSplitPaneID([]byte(herdrSplitResponse + "\n"))
+	if err != nil || got != "w1:p4" {
+		t.Fatalf("parseHerdrSplitPaneID() = %q, %v; want w1:p4", got, err)
+	}
+
+	for _, out := range []string{
+		"w1:p4",
+		`{"error":{"code":"pane_not_found","message":"pane w1:p9 not found"},"id":"cli:pane:split"}`,
+		"",
+	} {
+		if got, err := parseHerdrSplitPaneID([]byte(out)); err == nil {
+			t.Errorf("parseHerdrSplitPaneID(%q) = %q, want error", out, got)
+		}
+	}
+}
+
+func TestHerdrCreatePaneQuotesCommand(t *testing.T) {
+	logPath := writeArgLoggingMock(t, "herdr", herdrMock)
+	t.Setenv("HERDR_PANE_ID", "")
+	_, err := (&HerdrMux{}).CreatePane(PaneOptions{Command: []string{"agy", "--model", "gemini; touch /tmp/pwned"}})
+	if err != nil {
+		t.Fatalf("CreatePane failed: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read mock log: %v", err)
+	}
+	want := "pane run w1:p4 exec 'agy' '--model' 'gemini; touch /tmp/pwned'"
+	if !strings.Contains(string(data), want) {
+		t.Errorf("expected quoted pane run %q, got:\n%s", want, data)
 	}
 }
