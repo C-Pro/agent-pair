@@ -12,7 +12,7 @@ Use `agent-pair` to work with a read-only follower in a separate terminal-multip
 A follower reads this workspace and everything you send it, under its own provider account and its own retention terms. Starting a session widens who can see this code.
 
 - Confirm with the user before the first session in a repository, unless they have already asked for one.
-- Pick a follower model the user's organization has approved to receive this code. Free and community tiers usually retain prompts for training.
+- Pick a follower model the user's organization has approved to receive this code. Free and community tiers usually retain prompts for training. Where `--model` is optional, an approved follower CLI configuration can supply the model.
 - Do not send secrets, credentials, customer data, or production configuration into a turn. The follower can read the working directory, so do not start a session in a directory holding those.
 
 ## Start a session
@@ -26,11 +26,49 @@ Identify the current host and pass it explicitly as `--leader`:
 | Claude Code | `claude` |
 | Codex | `codex` |
 
-Choose an installed follower and start a session from the target repository. The model is explicit; there is no default.
+Choose the follower requested by the user, or an installed follower when none was specified. Model selection depends on the follower:
+
+| Follower | `--model` requirement | Notes |
+| --- | --- | --- |
+| `codex`, `claude`, `agy` | Optional | Omit `--model` to let the follower CLI select its model |
+| `opencode` | Required | Pass an approved model ID (discover with `agent-pair models opencode`) |
+
+`agent-pair` does not supply its own default model. Where `--model` is optional, omitting the flag lets the follower CLI select its model.
+
+### Examples
+
+When the user requests Codex without naming a model (e.g. from Antigravity):
 
 ```bash
-agent-pair start --leader claude --follower claude --model claude-opus-5
+agent-pair start --leader agy --follower codex
 ```
+
+For a Claude Code follower using its configured/default model:
+
+```bash
+agent-pair start --leader agy --follower claude
+```
+
+When the user explicitly requests a specific model or alias (e.g. Claude's `opus` alias):
+
+```bash
+agent-pair start --leader claude --follower claude --model opus
+```
+
+For OpenCode, discover models if needed and pass the selected model (replace `<selected-model-id>` with the actual model ID):
+
+```bash
+agent-pair models opencode
+agent-pair start --leader agy --follower opencode --model <selected-model-id>
+```
+
+### Startup guidelines
+
+1. Identify the current host and pass its value as `--leader`.
+2. Use the requested follower and preserve any explicit model choice. If no model was requested, omit `--model` where supported (`codex`, `claude`, `agy`).
+3. Where `--model` is optional and no model was requested, do not inspect configuration files or agent internals to determine a model; run `agent-pair start` directly. For OpenCode, select an approved model ID first. Never inspect credentials to discover models.
+4. Model discovery is optional, not a prerequisite. Do not run `agent-pair models codex` (the Codex adapter does not support model listing).
+5. If startup fails, diagnose the reported error directly. Do not infer that `--model` is missing merely because model listing is unsupported.
 
 `agent-pair` detects `tmux`, `zellij`, or `herdr`. Prefer `tmux`, which reports pane ids reliably. The follower starts in read-only mode by default: on Claude Code that is plan mode with the mutating tools denied, `--restricted`, and no MCP servers; on Codex an OS-level read-only sandbox whose escalations need human approval. Use `--leader-model` or either callsign override only when automatic callsign selection is unsuitable.
 
